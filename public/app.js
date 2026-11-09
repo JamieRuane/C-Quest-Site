@@ -45,10 +45,11 @@ TOPICS.forEach(t => {
 });
 
 /* ---------- state ---------- */
-const DEF = { xp: 0, done: {}, quiz: {}, streak: 0, best: 0, last: null, days: {}, bookmarks: {}, mistakes: {}, ach: {}, solved: {}, perfect: 0, cleared: 0, goal: 30, sound: true, unlockAll: false, play: '' };
+const DEF = { xp: 0, done: {}, quiz: {}, streak: 0, best: 0, last: null, days: {}, bookmarks: {}, mistakes: {}, ach: {}, solved: {}, perfect: 0, cleared: 0, goal: 30, sound: true, unlockAll: false, play: '', owner: null };
 let S = load();
 function load() { try { return Object.assign(structuredClone(DEF), JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { return structuredClone(DEF); } }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* private mode */ } hud(); }
+let cloudOK = false;   // true once this account's cloud copy has been read, so we never overwrite it blindly
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* private mode */ } if (cloudOK && window.Cloud && Cloud.user) Cloud.save(S); hud(); }
 
 const unitDone = u => u.startsWith('quiz:') ? (S.quiz[u.slice(5)] || 0) >= PASS : !!S.done[u];
 const unlocked = u => { const i = UNITS.indexOf(u); return S.unlockAll || i <= 0 || unitDone(UNITS[i - 1]); };
@@ -95,7 +96,12 @@ function hud() {
   $('#st-streak').textContent = '🔥 ' + liveStreak();
   $('#st-xp').textContent = '⚡ ' + S.xp + ' XP';
   $('#st-lvl').textContent = '🎖️ Lv ' + level();
+  const C = window.Cloud, a = $('#acct');
+  a.hidden = !(C && C.enabled);
+  a.textContent = C && C.user ? '👤 ' + (C.user.displayName || C.user.email || 'Account').split(' ')[0] : 'Sign in';
 }
+const signIn = () => Cloud.signIn().catch(e => toast(e.code === 'auth/unauthorized-domain' ? 'This web address is not on the Firebase authorised-domains list yet (see SETUP.md).' : e.code === 'auth/popup-closed-by-user' ? 'Sign-in cancelled.' : 'Sign-in failed: ' + (e.code || e.message), 6000));
+$('#acct').onclick = () => { if (Cloud.user) location.hash = '#/me'; else signIn(); };
 function toast(msg, ms = 3200) { const t = el(`<div class="toast">${msg}</div>`); $('#toasts').append(t); setTimeout(() => t.remove(), ms); }
 let actx;
 function beep(freqs, dur = .11) {
@@ -117,17 +123,42 @@ function confetti() {
     document.body.append(c); setTimeout(() => c.remove(), 4500);
   }
 }
+/* Code runner: local gcc when opened through start.bat, a free online compiler (Wandbox) when hosted. */
+const LOCAL = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) && !/[?&]online\b/.test(location.search);
+async function wandbox(code, stdin) {
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);
+  try {
+    const r = await fetch('https://wandbox.org/api/compile.json', { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, stdin, compiler: 'gcc-head-c', 'compiler-option-raw': '-std=c17\n-Wall\n-lm' }) });
+    if (!r.ok) throw new Error('http ' + r.status);
+    return await r.json();
+  } catch (e) { if (e.name === 'AbortError') return { timedOut: true }; throw e; }
+  finally { clearTimeout(timer); }
+}
+async function runOnline(code, stdins) {
+  const tidy = t => String(t || '').replace(/\bprog\.c\b/g, 'main.c').trim();
+  const asRun = j => j.timedOut ? { stdout: '', code: 0, timedOut: true } : { stdout: j.program_output || '', code: +j.status || 0 };
+  const first = await wandbox(code, stdins[0] || '');
+  if (first.timedOut) return { compile: { ok: true, output: '' }, runs: stdins.map(() => asRun(first)) };
+  const out = tidy(first.compiler_error);
+  if (first.status !== '0' && /error:|ld returned|undefined reference/.test(out)) return { compile: { ok: false, output: out }, runs: [] };
+  const rest = await Promise.all(stdins.slice(1).map(i => wandbox(code, i || '')));
+  return { compile: { ok: true, output: out }, runs: [first, ...rest].map(asRun) };
+}
 async function runC(code, stdins) {
   try {
+    if (!LOCAL) return await runOnline(code, stdins);
     const r = await fetch('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, stdins }) });
     if (!r.ok) throw 0;
     return await r.json();
   } catch { return { offline: true }; }
 }
-const OFFLINE = '<div class="hintbox">🔌 <b>The code runner is not reachable.</b> Start the site by double-clicking <code>start.bat</code> (it compiles your code with gcc on your own machine), then open <code>http://localhost:4321</code>.</div>';
+const OFFLINE = LOCAL
+  ? '<div class="hintbox">🔌 <b>The code runner is not reachable.</b> Start the site by double-clicking <code>start.bat</code> (it compiles your code with gcc on your own machine), then open <code>http://localhost:4321</code>.</div>'
+  : '<div class="hintbox">🔌 <b>The online compiler did not answer.</b> It is a free shared service and is sometimes busy — check your connection, wait a few seconds and try again.</div>';
 const NOCC = '<div class="hintbox">⚠️ <b>No C compiler found.</b> Install gcc (Bro Code shows how in the very first clip), then restart <code>start.bat</code>.</div>';
 function crashNote(r) {
-  if (r.timedOut) return '⏱️ Timed out after 4 seconds — infinite loop, or waiting for input that never comes?';
+  if (r.timedOut || r.code === 137) return '⏱️ Timed out — infinite loop, or waiting for input that never comes?';
   if (r.flooded) return '🌊 Way too much output — probably an infinite loop.';
   if (r.code === 3221225477 || r.code === 139) return '💥 Segmentation fault — your program touched memory it does not own.';
   if (r.code === 3221225725) return '💥 Stack overflow — runaway recursion or a gigantic local array.';
@@ -244,7 +275,7 @@ const R = {
       const bare = ed.value.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '');
       for (const [re, msg] of s.must || []) if (!new RegExp(re).test(bare)) return fail(`<p>${inl(msg)}</p>`);
       for (const [re, msg] of s.not || []) if (new RegExp(re).test(bare)) return fail(`<p>${inl(msg)}</p>`);
-      out.innerHTML = '<span class="muted">Compiling and running tests…</span>';
+      out.innerHTML = '<span class="muted">Compiling and running tests…' + (LOCAL ? '' : ' (online compiler — this can take a few seconds)') + '</span>';
       const r = await runC(ed.value, tests.map(t => t.in || ''));
       if (guard(r)) return { retry: true, msg: '<p>Could not run your code.</p>' };
       if (!r.compile.ok) { out.innerHTML = compileBox(r); return fail('<p>It does not compile yet. Read the first error — the line number is right there.</p>'); }
@@ -436,7 +467,7 @@ function vReview(key) {
 }
 
 function vPlay() {
-  view.innerHTML = '<div class="page"><h1>🧪 Playground</h1><p class="lead">A blank canvas. Try things, break things — it runs real C on your machine. Your code is saved automatically.</p><div class="edw"></div><div class="ed-tools"><button class="btn primary run">▶ Run</button><button class="btn ghost reset">↺ Reset</button></div><div class="lbl muted">Program input (stdin) — what the program would read from the keyboard</div><textarea class="field" rows="2" id="stdin" spellcheck="false"></textarea><div class="out" style="margin-top:14px"></div></div>';
+  view.innerHTML = '<div class="page"><h1>🧪 Playground</h1><p class="lead">A blank canvas. Try things, break things — ' + (LOCAL ? 'it runs real C on your machine.' : 'it runs real C on a free online compiler, so give it a few seconds.') + ' Your code is saved automatically.</p><div class="edw"></div><div class="ed-tools"><button class="btn primary run">▶ Run</button><button class="btn ghost reset">↺ Reset</button></div><div class="lbl muted">Program input (stdin) — what the program would read from the keyboard</div><textarea class="field" rows="2" id="stdin" spellcheck="false"></textarea><div class="out" style="margin-top:14px"></div></div>';
   const ed = editor(S.play || window.COURSE.blank); $('.edw').append(ed.node);
   ed.ta.addEventListener('input', () => { S.play = ed.value; save(); });
   $('.reset').onclick = () => { ed.set(window.COURSE.blank); S.play = ''; save(); };
@@ -460,6 +491,12 @@ function vGlossary() {
   $('.search').oninput = e => draw(e.target.value.toLowerCase()); draw('');
 }
 
+function accountCard() {
+  const C = window.Cloud;
+  if (!C || !C.enabled) return LOCAL ? '<h2 class="sec">Account</h2><div class="card"><span class="muted">Accounts are not switched on yet. Follow <code>SETUP.md</code> to connect Firebase — until then progress stays in this browser.</span></div>' : '';
+  if (C.user) return `<h2 class="sec">Account</h2><div class="card row" style="justify-content:space-between;flex-wrap:wrap"><div><b>${esc(C.user.displayName || 'Signed in')}</b><br><span class="muted">${esc(C.user.email || '')} · progress syncs to this account</span></div><button class="btn sm" id="signout">Sign out</button></div>`;
+  return '<h2 class="sec">Account</h2><div class="card"><p style="margin-top:0"><b>Sign in to keep your progress.</b> Your XP, streak, bookmarks and mistake pile are saved to your account and follow you to any device.</p><button class="btn primary" id="signin">Sign in with Google</button><p class="muted" style="margin-bottom:0;font-size:13px">What is stored: your Google name and email address (for signing in) and your course progress. Nothing else.</p></div>';
+}
 function vMe() {
   const doneN = LESSONS.filter(l => S.done[l.gid]).length;
   let cal = '';
@@ -468,19 +505,21 @@ function vMe() {
   <div class="tiles" style="justify-content:flex-start"><div class="tile"><small>Total XP</small><b>⚡ ${S.xp}</b></div><div class="tile"><small>Streak</small><b>🔥 ${liveStreak()}</b></div><div class="tile"><small>Best streak</small><b>🏔️ ${S.best}</b></div><div class="tile"><small>Lessons</small><b>📚 ${doneN}/${LESSONS.length}</b></div><div class="tile"><small>Code challenges</small><b>⌨️ ${count(S.solved)}</b></div></div>
   <h2 class="sec">Last 5 weeks</h2><div class="cal">${cal}</div><p class="muted">Light green = you practised. Bright green = you hit your daily goal.</p>
   <h2 class="sec">Achievements (${count(S.ach)}/${ACH.length})</h2><div class="grid">${ACH.map(a => `<div class="ach${S.ach[a[0]] ? '' : ' off'}"><i>${a[1]}</i><b>${a[2]}</b><small>${a[3]}</small></div>`).join('')}</div>
-  <h2 class="sec">Settings</h2><div class="card settings">
+  ${accountCard()}<h2 class="sec">Settings</h2><div class="card settings">
     <label>Daily XP goal <select id="goal">${[[15, 'Casual — 15'], [30, 'Regular — 30'], [50, 'Serious — 50'], [80, 'Insane — 80']].map(g => `<option value="${g[0]}"${S.goal === g[0] ? ' selected' : ''}>${g[1]}</option>`).join('')}</select></label>
     <label>Sound effects <input type="checkbox" id="snd"${S.sound ? ' checked' : ''}></label>
     <label>Unlock everything (skip the lesson order) <input type="checkbox" id="unl"${S.unlockAll ? ' checked' : ''}></label>
     <label>Back up or move your progress <span><button class="btn sm" id="exp">Export</button> <button class="btn sm" id="imp">Import</button></span></label>
     <label>Start over <button class="btn sm danger" id="rst">Reset all progress</button></label>
-  </div><p class="muted">Progress is stored in this browser only.</p></div>`;
+  </div><p class="muted">${window.Cloud && Cloud.user ? 'Progress is saved to your account.' : 'Progress is stored in this browser only.'}</p></div>`;
+  if ($('#signin')) $('#signin').onclick = signIn;
+  if ($('#signout')) $('#signout').onclick = () => Cloud.signOut();
   $('#goal').onchange = e => { S.goal = +e.target.value; save(); };
   $('#snd').onchange = e => { S.sound = e.target.checked; save(); };
   $('#unl').onchange = e => { S.unlockAll = e.target.checked; save(); };
   $('#exp').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' })); a.download = 'c-quest-progress.json'; a.click(); };
-  $('#imp').onclick = () => { const f = document.createElement('input'); f.type = 'file'; f.accept = '.json'; f.onchange = async () => { try { S = Object.assign(structuredClone(DEF), JSON.parse(await f.files[0].text())); save(); toast('Progress imported'); vMe(); } catch { toast('That file is not a C Quest backup'); } }; f.click(); };
-  $('#rst').onclick = () => { if (confirm('Delete ALL progress, bookmarks and streaks? This cannot be undone.')) { S = structuredClone(DEF); save(); vMe(); } };
+  $('#imp').onclick = () => { const f = document.createElement('input'); f.type = 'file'; f.accept = '.json'; f.onchange = async () => { try { S = Object.assign(structuredClone(DEF), JSON.parse(await f.files[0].text()), { owner: S.owner }); save(); toast('Progress imported'); vMe(); } catch { toast('That file is not a C Quest backup'); } }; f.click(); };
+  $('#rst').onclick = () => { if (confirm('Delete ALL progress, bookmarks and streaks? This cannot be undone.')) { S = Object.assign(structuredClone(DEF), { owner: S.owner }); save(); vMe(); } };
 }
 
 /* ---------- router ---------- */
@@ -500,5 +539,26 @@ function route() {
   else vHome();
 }
 window.addEventListener('hashchange', route);
+const refresh = () => { if (document.body.classList.contains('in-session')) hud(); else route(); };
+window.addEventListener('cloud-ready', refresh);
+window.addEventListener('cloud-auth', async e => {
+  const u = e.detail;
+  cloudOK = false;
+  if (!u) {                                   // signed out: the next person on this browser starts clean
+    if (S.owner) { S = structuredClone(DEF); save(); }
+    return refresh();
+  }
+  try {
+    const remote = await Cloud.load();
+    if (S.owner && S.owner !== u.uid) S = structuredClone(DEF);          // someone else's leftovers
+    if (remote && (remote.xp || 0) >= S.xp) S = Object.assign(structuredClone(DEF), remote);   // else keep (and upload) what was earned as a guest
+    S.owner = u.uid; cloudOK = true; save();
+    toast('👋 Signed in as ' + esc(u.displayName || u.email || 'you'));
+  } catch (err) {
+    console.warn('cloud load failed', err);
+    toast('Could not load your saved progress (' + esc(err.code || 'network') + '). Changes are kept on this device for now.', 6000);
+  }
+  refresh();
+});
 route();
 })();
