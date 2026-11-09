@@ -110,7 +110,7 @@ Two kinds of complaints:
 
 **warning** — "This builds, but I bet it's a bug." You get a program, and usually a bad day. Read your warnings.
 
-The Run button here does all that with real gcc on your own computer.`),
+The Run button here does all of that with real gcc.`),
   Q('gcc reports 1 error and 0 warnings. Can you run your program?', ['Yes, but it might misbehave', 'No — no executable was produced', 'Yes, errors are just suggestions', 'Only the lines before the error run'], 1, c`C isn't run line by line. Either the whole file compiles, or nothing runs.`),
   Q(c`gcc says: ~main.c:5:5: error: expected ';' before 'return'~
 
