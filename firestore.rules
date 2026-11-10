@@ -2,14 +2,28 @@ rules_version = '2';
 
 // C Quest - Firestore security rules
 //
-// Data model: one document per user at /users/{uid}
-//   json       string     the whole progress object, JSON-encoded (written by public/cloud.js)
-//   xp         int        copy of the XP total, so it can be read without parsing json
-//   updatedAt  timestamp  set by the server on every write
+// Data model
+//   /users/{uid}         private progress, readable only by its owner
+//     json       string     the whole progress object, JSON-encoded (written by public/cloud.js)
+//     xp         int        copy of the XP total, so it can be read without parsing json
+//     updatedAt  timestamp  set by the server on every write
+//
+//   /leaderboard/{uid}   public leaderboard entry, opt-in, readable by signed-in users while visible
+//     name       string     chosen nickname (never the Google name)
+//     visible    bool       false after leaving the leaderboard; hidden entries are private again
+//     xp         int        leaderboard XP - follows the real XP, within the limits below
+//     dayXp      int        leaderboard XP gained so far today (UTC), for the daily cap
+//     streak     int        current daily streak
+//     updatedAt  timestamp  set by the server on every write
 //
 // Anything not explicitly allowed below is denied.
 // Tests: tests/firestore.rules.test.js  (run with `npm run test:rules`)
-// Keep MAX_JSON and MIN_SECONDS_BETWEEN_SAVES in sync with public/cloud.js.
+// Every limit here is mirrored in public/cloud.js so the site never sends a write these rules reject.
+//
+// Write quota: the free plan allows 20,000 writes a day across all users. With one progress save
+// per 5 s (17,280/day) and one leaderboard save per 60 s (1,440/day), a single account can make at
+// most 18,720 writes a day, so no one user can use up the quota for everyone else. Documents can
+// never be deleted by clients, because delete + re-create would get around these limits.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -22,35 +36,89 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
-    // The document must have exactly the shape cloud.js writes - no extra fields,
-    // no missing fields, sane sizes, and a timestamp the client cannot fake.
+    // At least `seconds` since this document was last written.
+    function waited(seconds) {
+      return request.time >= resource.data.updatedAt + duration.value(seconds, 's');
+    }
+
+    // ---------- private progress ----------
+
+    // Exactly the shape cloud.js writes: no extra or missing fields, sane sizes,
+    // and a timestamp the client cannot fake.
     function isValidProgress() {
       let d = request.resource.data;
       return d.keys().hasOnly(['json', 'xp', 'updatedAt'])
           && d.keys().hasAll(['json', 'xp', 'updatedAt'])
           && d.json is string
           && d.json.size() > 0
-          && d.json.size() <= 300000          // MAX_JSON: a fully completed course is ~30 KB
+          && d.json.size() <= 300000          // a fully completed course is ~30 KB
           && d.xp is int
           && d.xp >= 0
           && d.xp <= 10000000
           && d.updatedAt == request.time;     // only serverTimestamp() passes this
     }
 
-    // At most one save every 5 seconds per user. Each user can then make at most
-    // 17,280 writes a day - below the free plan's 20,000 - so no single account
-    // can use up the daily write quota for everyone else.
-    function isNotTooSoon() {
-      return !('updatedAt' in resource.data)
-          || request.time >= resource.data.updatedAt + duration.value(5, 's');
-    }
-
     match /users/{uid} {
       allow get: if isOwner(uid);
       allow create: if isOwner(uid) && isValidProgress();
-      allow update: if isOwner(uid) && isValidProgress() && isNotTooSoon();
-      allow delete: if isOwner(uid);
+      allow update: if isOwner(uid) && isValidProgress()
+                    && (!('updatedAt' in resource.data) || waited(5));
       // No `list`: nobody can browse or query the users collection, not even signed in.
+      // No `delete`: see the note on the write quota above.
+    }
+
+    // ---------- public leaderboard ----------
+
+    // 3-20 characters: letters, digits, spaces, _ . -  - starting and ending with a letter or digit.
+    function isValidName(name) {
+      return name is string && name.matches('[A-Za-z0-9][A-Za-z0-9 _.-]{1,18}[A-Za-z0-9]');
+    }
+
+    function hasBoardShape() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'visible', 'xp', 'dayXp', 'streak', 'updatedAt'])
+          && d.keys().hasAll(['name', 'visible', 'xp', 'dayXp', 'streak', 'updatedAt'])
+          && isValidName(d.name)
+          && d.visible is bool
+          && d.xp is int && d.xp >= 0
+          && d.dayXp is int && d.dayXp >= 0 && d.dayXp <= 600
+          && d.streak is int && d.streak >= 0 && d.streak <= 3650
+          && d.updatedAt == request.time;
+    }
+
+    // Joining: XP starts at no more than a full course (~1,400), then catches up
+    // through the daily cap if the user already had more.
+    function isValidJoin() {
+      let d = request.resource.data;
+      return hasBoardShape()
+          && d.visible == true
+          && d.xp <= 1500
+          && d.dayXp == 0
+          && d.streak <= 30;
+    }
+
+    // Each later update must be a believable step from the previous one.
+    function isValidBoardStep() {
+      let d = request.resource.data;
+      let old = resource.data;
+      let sameDay = old.updatedAt.date() == request.time.date();   // calendar day in UTC
+      let gained = d.xp - old.xp;
+      return hasBoardShape()
+          && gained <= 200                                         // per save (at most one save a minute)
+          && d.dayXp == (sameDay ? old.dayXp : 0) + (gained > 0 ? gained : 0)
+          // dayXp <= 600 (checked in hasBoardShape) caps the gain at 600 XP a day
+          && (d.streak <= old.streak                               // streaks can always fall (or reset)
+              || (d.streak == old.streak + 1                       // but rise by at most 1 per day,
+                  && (!sameDay || old.streak == 0)));              // except that a new streak can start today
+    }
+
+    match /leaderboard/{uid} {
+      allow get: if isOwner(uid) || (signedIn() && resource.data.visible == true);
+      // Queries must ask for visible entries only, e.g. where('visible', '==', true).
+      allow list: if signedIn() && resource.data.visible == true;
+      allow create: if isOwner(uid) && isValidJoin();
+      allow update: if isOwner(uid) && waited(60) && isValidBoardStep();
+      // No `delete`: leaving sets visible = false, which hides the entry from everyone else.
     }
   }
 }

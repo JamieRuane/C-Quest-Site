@@ -491,10 +491,94 @@ function vGlossary() {
   $('.search').oninput = e => draw(e.target.value.toLowerCase()); draw('');
 }
 
+/* ---------- leaderboard ---------- */
+const STALE_MS = 2 * 86400000;      // no save for 2 days = the streak has lapsed
+const boardStreak = e => (Date.now() - e.updatedAtMs > STALE_MS ? 0 : e.streak);
+const nameError = 'Nicknames are 3–20 characters: letters, numbers, spaces, _ . - (starting and ending with a letter or number).';
+async function boardWrite(btn, label, work) {
+  const wait = Cloud.boardWait();
+  btn.disabled = true; btn.textContent = wait > 1000 ? `${label}… (about ${Math.ceil(wait / 1000)} s — one change a minute)` : label + '…';
+  try { await work(); return true; }
+  catch (err) { toast(err.message === 'bad-name' ? nameError : 'Could not update the leaderboard (' + esc(err.code || err.message) + '). Try again in a minute.', 6000); return false; }
+  finally { if (btn.isConnected) btn.disabled = false; }
+}
+function joinCard(e) {
+  return `<div class="card lb-join"><h3>${e ? 'Rejoin the leaderboard' : 'Join the leaderboard'}</h3>
+    <p class="muted" style="margin-top:0">Pick a nickname — your Google name is never shown. Other signed-in learners will see your nickname, XP and streak. You can rename or leave any time in Profile.</p>
+    <div class="row" style="flex-wrap:wrap"><input class="field" id="lbname" maxlength="20" placeholder="Nickname, e.g. PointerPro" value="${esc(e ? e.name : '')}" style="margin:0;flex:1;min-width:200px" autocomplete="off" spellcheck="false"><button class="btn primary" id="lbjoin">${e ? 'Rejoin' : 'Join'}</button></div></div>`;
+}
+async function vBoard() {
+  const C = window.Cloud;
+  view.innerHTML = '<div class="page"><h1>🏆 Leaderboard</h1><p class="lead">The learners with the most XP, all time. 🔥 is each person\'s current daily streak.</p><div id="lb"></div></div>';
+  const box = $('#lb');
+  if (!C || !C.enabled) { box.innerHTML = '<div class="card muted">The leaderboard needs accounts, which are not switched on for this copy of the site.</div>'; return; }
+  if (!C.user) { box.innerHTML = '<div class="card"><p style="margin-top:0"><b>Sign in to see the leaderboard</b> and compete for the top spot. Joining is optional, and you choose the nickname people see.</p><button class="btn primary" id="lbsign">Sign in with Google</button></div>'; $('#lbsign').onclick = signIn; return; }
+  const me = C.board.entry, joined = !!(me && me.visible);
+  box.innerHTML = (joined ? '' : joinCard(me)) + '<div class="card lb" id="lbt"><span class="muted">Loading the leaderboard…</span></div>';
+  if (!joined) {
+    const inp = $('#lbname'), btn = $('#lbjoin');
+    const go = async () => {
+      if (!C.isValidName(C.cleanName(inp.value))) { toast(nameError, 6000); inp.focus(); return; }
+      if (await boardWrite(btn, me ? 'Rejoining' : 'Joining', () => C.joinBoard(inp.value, S))) toast('🏆 You\'re on the leaderboard!');
+    };
+    btn.onclick = go; inp.onkeydown = ev => { if (ev.key === 'Enter') go(); };
+  }
+  let rows;
+  try { rows = await C.topBoard(); }
+  catch (err) {
+    if (!box.isConnected) return;
+    $('#lbt').innerHTML = `<span class="muted">Could not load the leaderboard (${esc(err.code || 'network')}).${err.code === 'failed-precondition' ? ' The database index has not been created yet — see “Changing the security rules” in SETUP.md.' : ' Check your connection and try again.'}</span>`;
+    return;
+  }
+  if (!box.isConnected) return;
+  if (joined) {                                       // show my own freshest numbers
+    const i = rows.findIndex(r => r.uid === C.user.uid);
+    if (i >= 0) rows[i] = { ...rows[i], ...me }; else if (rows.length < 25 || me.xp > rows[rows.length - 1].xp) rows.push({ uid: C.user.uid, ...me });
+    rows.sort((a, b) => b.xp - a.xp); rows = rows.slice(0, 25);
+  }
+  if (!rows.length) { $('#lbt').innerHTML = '<span class="muted">Nobody has joined yet. Be the first!</span>'; return; }
+  const medal = ['🥇', '🥈', '🥉'];
+  let rank = 0, prev = null;
+  const html = rows.map((r, i) => {
+    if (r.xp !== prev) { rank = i + 1; prev = r.xp; }               // ties share a rank
+    const mine = r.uid === C.user.uid, st = boardStreak(r);
+    return `<div class="lb-row${mine ? ' me' : ''}${rank <= 3 ? ' top' : ''}"><span class="lb-rank">${medal[rank - 1] || '#' + rank}</span><span class="lb-name">${esc(r.name)}${mine ? ' <em>you</em>' : ''}</span><span class="lb-streak${st ? '' : ' cold'}" title="Current daily streak">🔥 ${st}</span><span class="lb-xp">⚡ ${r.xp.toLocaleString()}</span></div>`;
+  }).join('');
+  let foot = '';
+  if (joined) {
+    const i = rows.findIndex(r => r.uid === C.user.uid);
+    if (i > 0) { const above = rows.slice(0, i).reverse().find(r => r.xp > me.xp); if (above) foot += `<p class="lb-nudge">⚡ <b>${(above.xp - me.xp + 1).toLocaleString()} XP</b> to overtake ${esc(above.name)}</p>`; }
+    else if (i === 0) foot += '<p class="lb-nudge">👑 You\'re in first place. Defend it!</p>';
+    if (S.xp > me.xp) foot += `<p class="muted">Your leaderboard XP updates about once a minute and adds at most 600 XP a day — ${(S.xp - me.xp).toLocaleString()} XP still to add.</p>`;
+  }
+  $('#lbt').innerHTML = html + foot;
+  if (joined && !rows.some(r => r.uid === C.user.uid)) {
+    try { const k = await C.boardRank(me.xp); if (box.isConnected) $('#lbt').insertAdjacentHTML('beforeend', `<p class="lb-nudge">You're <b>#${k.rank}</b> of ${k.total} — ${(rows[rows.length - 1].xp - me.xp + 1).toLocaleString()} XP to reach the top 25.</p>`); }
+    catch (err) { console.warn('rank lookup failed', err); }
+  }
+}
+function boardSettings() {
+  const C = window.Cloud, e = C.board.entry;
+  if (e && e.visible) return `<div class="card row lb-set" style="justify-content:space-between;flex-wrap:wrap;margin-top:12px"><div>🏆 On the leaderboard as <b>${esc(e.name)}</b><br><span class="muted">Shown to signed-in learners: nickname, XP and streak.</span></div><span><button class="btn sm" id="lbren">Rename</button> <button class="btn sm ghost" id="lbleave">Leave</button></span></div>`;
+  return `<div class="card row lb-set" style="justify-content:space-between;flex-wrap:wrap;margin-top:12px"><div>🏆 You're not on the leaderboard.<br><span class="muted">Join with a nickname to compete on XP.</span></div><a class="btn sm" href="#/board">${e ? 'Rejoin' : 'Join'}</a></div>`;
+}
+function wireBoardSettings() {
+  if ($('#lbren')) $('#lbren').onclick = async e => {
+    const n = prompt('New nickname (3–20 characters):', Cloud.board.entry.name);
+    if (n == null || Cloud.cleanName(n) === Cloud.board.entry.name) return;
+    if (!Cloud.isValidName(Cloud.cleanName(n))) { toast(nameError, 6000); return; }
+    if (await boardWrite(e.target, 'Renaming', () => Cloud.renameBoard(n))) toast('Renamed to ' + esc(Cloud.cleanName(n)));
+  };
+  if ($('#lbleave')) $('#lbleave').onclick = async e => {
+    if (!confirm('Leave the leaderboard? Your entry will be hidden from everyone. You can rejoin later.')) return;
+    if (await boardWrite(e.target, 'Leaving', () => Cloud.leaveBoard())) toast('You have left the leaderboard.');
+  };
+}
+
 function accountCard() {
   const C = window.Cloud;
   if (!C || !C.enabled) return LOCAL ? '<h2 class="sec">Account</h2><div class="card"><span class="muted">Accounts are not switched on yet. Follow <code>SETUP.md</code> to connect Firebase — until then progress stays in this browser.</span></div>' : '';
-  if (C.user) return `<h2 class="sec">Account</h2><div class="card row" style="justify-content:space-between;flex-wrap:wrap"><div><b>${esc(C.user.displayName || 'Signed in')}</b><br><span class="muted">${esc(C.user.email || '')} · progress syncs to this account</span></div><button class="btn sm" id="signout">Sign out</button></div>`;
+  if (C.user) return `<h2 class="sec">Account</h2><div class="card row" style="justify-content:space-between;flex-wrap:wrap"><div><b>${esc(C.user.displayName || 'Signed in')}</b><br><span class="muted">${esc(C.user.email || '')} · progress syncs to this account</span></div><button class="btn sm" id="signout">Sign out</button></div>${boardSettings()}`;
   return '<h2 class="sec">Account</h2><div class="card"><p style="margin-top:0"><b>Sign in to keep your progress.</b> Your XP, streak, bookmarks and mistake pile are saved to your account and follow you to any device.</p><button class="btn primary" id="signin">Sign in with Google</button><p class="muted" style="margin-bottom:0;font-size:13px">What is stored: your Google name and email address (for signing in) and your course progress. Nothing else.</p></div>';
 }
 function vMe() {
@@ -514,6 +598,7 @@ function vMe() {
   </div><p class="muted">${window.Cloud && Cloud.user ? 'Progress is saved to your account.' : 'Progress is stored in this browser only.'}</p></div>`;
   if ($('#signin')) $('#signin').onclick = signIn;
   if ($('#signout')) $('#signout').onclick = () => Cloud.signOut();
+  wireBoardSettings();
   $('#goal').onchange = e => { S.goal = +e.target.value; save(); };
   $('#snd').onchange = e => { S.sound = e.target.checked; save(); };
   $('#unl').onchange = e => { S.unlockAll = e.target.checked; save(); };
@@ -536,9 +621,11 @@ function route() {
   else if (r === 'play') vPlay();
   else if (r === 'glossary') vGlossary();
   else if (r === 'me') vMe();
+  else if (r === 'board') vBoard();
   else vHome();
 }
 window.addEventListener('hashchange', route);
+window.addEventListener('board-change', () => { if (/^#\/(board|me)\b/.test(location.hash) && !document.querySelector('#lbname:focus')) route(); });
 const refresh = () => { if (document.body.classList.contains('in-session')) hud(); else route(); };
 window.addEventListener('cloud-ready', refresh);
 window.addEventListener('cloud-auth', async e => {
