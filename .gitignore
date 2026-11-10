@@ -1,0 +1,6 @@
+# Dependencies (dev tools only - the site itself has none)
+node_modules/
+
+# Firebase CLI and emulator logs
+*-debug.log
+.firebase/

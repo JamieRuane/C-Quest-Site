@@ -1,0 +1,51 @@
+name: Firestore rules tests
+
+# Runs the security-rules test suite against the Firestore emulator
+# whenever the rules, the code that writes to Firestore, or the tests change.
+on:
+  pull_request:
+    paths:
+      - firestore.rules
+      - firebase.json
+      - public/cloud.js
+      - tests/**
+      - package.json
+      - package-lock.json
+      - .github/workflows/rules-tests.yml
+  push:
+    branches: [main]
+    paths:
+      - firestore.rules
+      - public/cloud.js
+      - tests/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v5      # the Firestore emulator runs on Java
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache the Firestore emulator
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('package-lock.json') }}
+
+      - run: npm ci
+
+      - run: npm run test:rules

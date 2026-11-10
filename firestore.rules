@@ -1,9 +1,56 @@
 rules_version = '2';
+
+// C Quest - Firestore security rules
+//
+// Data model: one document per user at /users/{uid}
+//   json       string     the whole progress object, JSON-encoded (written by public/cloud.js)
+//   xp         int        copy of the XP total, so it can be read without parsing json
+//   updatedAt  timestamp  set by the server on every write
+//
+// Anything not explicitly allowed below is denied.
+// Tests: tests/firestore.rules.test.js  (run with `npm run test:rules`)
+// Keep MAX_JSON and MIN_SECONDS_BETWEEN_SAVES in sync with public/cloud.js.
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each signed-in user can read and write only their own progress document.
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // The document must have exactly the shape cloud.js writes - no extra fields,
+    // no missing fields, sane sizes, and a timestamp the client cannot fake.
+    function isValidProgress() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['json', 'xp', 'updatedAt'])
+          && d.keys().hasAll(['json', 'xp', 'updatedAt'])
+          && d.json is string
+          && d.json.size() > 0
+          && d.json.size() <= 300000          // MAX_JSON: a fully completed course is ~30 KB
+          && d.xp is int
+          && d.xp >= 0
+          && d.xp <= 10000000
+          && d.updatedAt == request.time;     // only serverTimestamp() passes this
+    }
+
+    // At most one save every 5 seconds per user. Each user can then make at most
+    // 17,280 writes a day - below the free plan's 20,000 - so no single account
+    // can use up the daily write quota for everyone else.
+    function isNotTooSoon() {
+      return !('updatedAt' in resource.data)
+          || request.time >= resource.data.updatedAt + duration.value(5, 's');
+    }
+
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow get: if isOwner(uid);
+      allow create: if isOwner(uid) && isValidProgress();
+      allow update: if isOwner(uid) && isValidProgress() && isNotTooSoon();
+      allow delete: if isOwner(uid);
+      // No `list`: nobody can browse or query the users collection, not even signed in.
     }
   }
 }
