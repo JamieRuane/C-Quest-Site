@@ -452,7 +452,7 @@ function vBookmarks() {
   keys.forEach(k => {
     if (k.startsWith('g:')) { const g = GLOSS.find(x => x.term === k.slice(2)); if (!g) return; h += `<div class="item" data-k="${esc(k)}"><div class="meta">Definition</div><b>${esc(g.term)}</b><div>${inl(g.def)}</div>`; }
     else { const L = stepLabel(k); h += `<div class="item" data-k="${esc(k)}"><div class="meta">${L.type} · ${esc(L.where)}</div><b>${esc(L.text)}</b>${L.code ? codeBlock(L.code.replace(/\[\[(.+?)\]\]/g, '____')) : ''}`; }
-    h += `<textarea rows="1" placeholder="Note to self: why was this hard?">${esc(S.bookmarks[k].note || '')}</textarea><div class="acts">${k.startsWith('g:') ? '' : `<a class="btn sm blue" href="#/review/${k}">Try it again</a>`}<button class="btn sm ghost rm">Remove</button></div></div>`;
+    h += `<textarea rows="1" maxlength="500" placeholder="Note to self: why was this hard?">${esc(S.bookmarks[k].note || '')}</textarea><div class="acts">${k.startsWith('g:') ? '' : `<a class="btn sm blue" href="#/review/${k}">Try it again</a>`}<button class="btn sm ghost rm">Remove</button></div></div>`;
   });
   view.innerHTML = h + '</div>';
   $$('.item').forEach(it => {

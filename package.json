@@ -1,0 +1,16 @@
+{
+  "name": "c-quest",
+  "private": true,
+  "description": "A Duolingo-style course that takes you from zero to comfortable C programmer.",
+  "scripts": {
+    "start": "node server.js",
+    "verify": "node tools/verify.js",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-c-quest \"node --test tests/firestore.rules.test.js\"",
+    "deploy:rules": "firebase deploy --only firestore:rules"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "firebase": "^13.2.0",
+    "firebase-tools": "^15.35.0"
+  }
+}
