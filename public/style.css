@@ -15,11 +15,11 @@ code{background:#eceffe;border:1px solid #d9defa;border-radius:6px;padding:.05em
 
 /* nav */
 #nav{background:rgba(255,255,255,.75);width:220px;flex:none;border-right:2px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh}
-#nav a{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:12px;color:var(--muted);text-decoration:none;font-weight:700;border:2px solid transparent;text-transform:uppercase;font-size:14px;letter-spacing:.04em}
+#nav a{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:12px;color:var(--muted);text-decoration:none;font-family:"Fredoka","Geist","Segoe UI",system-ui,sans-serif;font-weight:600;border:2px solid transparent;text-transform:uppercase;font-size:15px;letter-spacing:.05em}
 #nav a i{font-style:normal;font-size:20px}
 #nav a:hover{background:var(--card2)}
 #nav a.on{background:#ddf4ff;border-color:#84d8ff;color:var(--blue)}
-#nav .logo{font-size:26px;text-transform:none;color:var(--green);margin-bottom:14px;letter-spacing:0;gap:4px}
+#nav .logo{font-size:28px;font-weight:700;text-transform:none;color:var(--green);margin-bottom:14px;letter-spacing:0;gap:4px}
 #nav .logo b{background:var(--green);color:#fff;border-radius:9px;padding:0 9px}
 #main{flex:1;min-width:0;display:flex;flex-direction:column}
 #top{display:flex;justify-content:flex-end;gap:10px;padding:14px 28px 0}
@@ -46,9 +46,11 @@ body.in-session #view{padding:0;max-width:none;height:100vh}
 .card{background:var(--card);border:2px solid var(--line);border-radius:18px;padding:18px}
 .card h3{font-size:17px}
 .topic-head{background:var(--tc);color:#08141a;border-radius:18px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;box-shadow:0 5px 0 rgba(0,0,0,.14)}
-.topic-head small{font-weight:900;opacity:.65;letter-spacing:.08em}
-.topic-head h2{font-size:22px;margin:0}
-.topic-head p{margin:2px 0 0;font-weight:600;opacity:.8;font-size:14px}
+.topic-head,.nlabel{font-family:"Fredoka","Geist","Segoe UI",system-ui,sans-serif}
+.topic-head small{font-weight:700;opacity:.65;letter-spacing:.1em}
+.topic-head h2{font-size:24px;font-weight:600;margin:0}
+.topic-head p{margin:2px 0 0;font-weight:500;opacity:.8;font-size:15px}
+.topic-prog{font-weight:700}
 .topic-prog{font-weight:900;background:rgba(0,0,0,.18);border-radius:12px;padding:6px 12px;white-space:nowrap}
 .nodes{display:flex;flex-direction:column;align-items:center;gap:20px;padding:30px 0 40px}
 .node{--off:var(--o,0px);display:flex;align-items:center;gap:14px;transform:translateX(var(--off));text-decoration:none;color:var(--text);width:300px}
@@ -59,9 +61,9 @@ body.in-session #view{padding:0;max-width:none;height:100vh}
 .node.locked .bubble{background:var(--line);font-size:22px}
 .node.locked{color:#9aa3c0}
 .node.cur .bubble{animation:pulse 1.6s infinite;outline:4px solid color-mix(in srgb,var(--tc) 40%,transparent);outline-offset:4px}
-.nlabel{font-weight:700;font-size:15px;line-height:1.25}
-.nlabel small{display:block;color:var(--muted);font-weight:600}
-.node.cur .nlabel::before{content:"START HERE";display:block;font-size:11px;font-weight:900;color:var(--purple);letter-spacing:.08em}
+.nlabel{font-weight:600;font-size:16px;line-height:1.25}
+.nlabel small{display:block;color:var(--muted);font-weight:500;font-size:14px}
+.node.cur .nlabel::before{content:"START HERE";display:block;font-size:12px;font-weight:700;color:var(--purple);letter-spacing:.1em}
 @keyframes pulse{50%{transform:translateY(-5px)}}
 .ring{position:relative;width:96px;height:96px;flex:none}
 .ring svg{transform:rotate(-90deg)}
