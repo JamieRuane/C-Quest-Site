@@ -1,15 +1,10 @@
-// Paste the config object from the Firebase console here (Project settings > Your apps > Web app).
-// These values are meant to be public - security comes from the Firestore rules in firestore.rules.
-// While this is null the site works without accounts and keeps progress in the browser.
-window.FIREBASE_CONFIG = null;
-
-/* Example:
+// Firebase configuration for C Quest
 window.FIREBASE_CONFIG = {
-  apiKey: "AIza...",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "1234567890",
-  appId: "1:1234567890:web:abcdef"
+  apiKey: "AIzaSyB0fN5GGFiRj5b1KETSP0Hps_HoLJ4TNqw",
+  authDomain: "c-quest-e9a23.firebaseapp.com",
+  projectId: "c-quest-e9a23",
+  storageBucket: "c-quest-e9a23.firebasestorage.app",
+  messagingSenderId: "221987727169",
+  appId: "1:221987727169:web:6163b79609d3230a5823c0",
+  measurementId: "G-D62324WZ4Z"
 };
-*/
