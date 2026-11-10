@@ -65,21 +65,39 @@ Firebase only accepts sign-ins from addresses you list.
 
 ## Changing the security rules
 
-[`firestore.rules`](firestore.rules) controls who can read and write saved progress. It enforces:
+[`firestore.rules`](firestore.rules) controls who can read and write saved progress and the leaderboard.
+
+**Private progress** (`users/<id>`):
 
 | Rule | Why |
 |---|---|
-| Users can only get, create, update or delete `users/<their own id>` | Nobody can see or change anyone else's progress |
+| Users can only get, create or update `users/<their own id>` | Nobody can see or change anyone else's progress |
 | Nobody can list or query the `users` collection | No browsing other accounts, even when signed in |
 | Documents must have exactly `json`, `xp` and `updatedAt` | No junk fields |
 | `json` is at most 300,000 characters | A finished course is about 30 KB; stops anyone filling the free 1 GB storage |
 | `xp` is a whole number from 0 to 10,000,000 | Keeps the field trustworthy |
 | `updatedAt` must be the server's time | Clients cannot fake or backdate it |
-| At most one save every 5 seconds per user | One account can make at most 17,280 writes a day, below the free plan's 20,000, so nobody can use up the daily quota for everyone |
+| At most one save every 5 seconds per user | Protects the shared daily write quota (see below) |
+| No deletes | Deleting and re-creating would get around the 5-second limit |
 
-The limits in `public/cloud.js` (`MIN_GAP_MS`, `MAX_JSON`) must match the rules, so the site never sends a write the rules reject.
+**Leaderboard** (`leaderboard/<id>`, opt-in, nickname only):
 
-**Before changing the rules, run the tests.** They start a local Firestore emulator (needs Java 11 or newer) and check 29 allowed and blocked cases. They never touch the real database.
+| Rule | Why |
+|---|---|
+| Only signed-in users can read it, and only entries with `visible == true` | Leaving hides your entry from everyone |
+| Nicknames: 3–20 letters, digits, spaces, `_ . -` | No HTML, no impersonating system text, no Google names |
+| Joining: at most 1,500 XP and a 30-day streak | Higher real totals catch up through the daily cap |
+| Each update: at most +200 XP, and at most one update a minute | No sudden jumps |
+| At most +600 XP per UTC day (`dayXp` must add up exactly) | A cheating script can at best match a very dedicated learner |
+| Streak rises by at most 1 a day (or 0 → 1 when a new streak starts) | Streaks can't be inflated |
+| XP and streaks can always fall | Resetting progress or breaking a streak always works |
+| No deletes; leaving sets `visible = false` | Same reason as above |
+
+**Write quota:** the free plan allows 20,000 writes a day across all users. One progress save per 5 s (17,280/day) plus one leaderboard save per minute (1,440/day) caps any single account at 18,720, so nobody can use up the quota for everyone else.
+
+The limits in `public/cloud.js` must match the rules, so the site never sends a write the rules reject. The tests check this by running the site's own code against the rules.
+
+**Before changing the rules, run the tests.** They start a local Firestore emulator (needs Java 11 or newer) and check 63 allowed and blocked cases. They never touch the real database.
 
 ```bash
 npm install
@@ -88,10 +106,22 @@ npm run test:rules
 
 The same tests run automatically on every pull request that touches the rules, `public/cloud.js` or the tests.
 
-**Rules are not deployed by pushing to GitHub.** After merging a rules change, publish it in one of two ways:
+**Rules and indexes are not deployed by pushing to GitHub.** Publish them with:
 
-- Paste the file into Firebase console → Firestore → Rules and click **Publish**, or
-- From this folder: `npx firebase login` once, then `npm run deploy:rules`.
+```bash
+npx firebase login
+npm run deploy:rules
+```
+
+`npx firebase login` is only needed once. `deploy:rules` publishes `firestore.rules` and the leaderboard's database indexes from `firestore.indexes.json`; new indexes take a few minutes to build. (The rules alone can also be pasted into Firebase console → Firestore → Rules → **Publish**, but the indexes can't.)
+
+### Trying features locally without touching real data
+
+```bash
+npm run emulators
+```
+
+Then open `http://localhost:4321/?emulator` (with `start.bat` running). The site talks to a local, throwaway copy of Firebase Authentication and Firestore. Sign-in uses the emulator's fake accounts, and nothing reaches the real project.
 
 ## Things to know
 

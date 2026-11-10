@@ -207,7 +207,27 @@ h2.sec{margin:28px 0 12px;font-size:20px}
 #acct:hover{filter:brightness(1.04)}
 .chips span{background:#fff}
 
+/* leaderboard */
+.lb-join{border-top:5px solid var(--gold);margin-bottom:16px}
+.lb{padding:8px}
+.lb-row{display:grid;grid-template-columns:52px minmax(0,1fr) auto auto;gap:14px;align-items:center;padding:10px 12px;border-radius:12px;font-weight:700}
+.lb-row+.lb-row{border-top:1px solid var(--line)}
+.lb-row.top{font-size:17px}
+.lb-row.me{background:#e3f8cf;border:2px solid #a5e075}
+.lb-row.me+.lb-row{border-top-color:transparent}
+.lb-rank{font-size:20px;text-align:center;color:var(--muted)}
+.lb-row:not(.top) .lb-rank{font-size:15px}
+.lb-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-name em{font-style:normal;font-size:11px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;background:var(--green);color:#fff;border-radius:99px;padding:2px 8px;margin-left:6px;vertical-align:2px}
+.lb-streak{color:#c25a00;background:#fff1dc;border-radius:99px;padding:2px 10px;font-size:14px}
+.lb-streak.cold{color:var(--muted);background:var(--card2);filter:grayscale(1)}
+.lb-xp{min-width:90px;text-align:right}
+.lb-nudge{margin:12px 12px 4px;font-weight:600}
+.lb-set{border-left:5px solid var(--gold)}
+
 @media(max-width:900px){
+  .lb-row{grid-template-columns:40px minmax(0,1fr) auto auto;gap:8px;padding:9px 8px}
+  .lb-xp{min-width:0}
   body{flex-direction:column}
   #nav{width:100%;height:auto;flex-direction:row;position:fixed;bottom:0;top:auto;border-right:0;border-top:2px solid var(--line);background:var(--bg);padding:6px;justify-content:space-around;z-index:20}
   #nav .logo,#nav a span{display:none}
