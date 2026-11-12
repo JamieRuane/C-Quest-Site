@@ -22,7 +22,10 @@ const plain = s => String(s || '').replace(/[~*]/g, '').replace(/\s+/g, ' ').tri
 /* syntax highlighting (one pattern per language) */
 const HL_TAIL = String.raw`\b(0x[\da-fA-F]+|\d+\.?\d*[fFdDmMuUlL]*)\b|\b([A-Za-z_]\w*)(?=\s*\()`;
 const HL_HEAD = String.raw`(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|([$@]{0,2}"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(^[ \t]*#\s*\w+)|`;
+const BT = '\x60';   // a backtick, for JavaScript template strings
 const HLS = {
+  java: new RegExp(HL_HEAD + String.raw`\b(int|long|short|byte|float|double|char|boolean|void|var|String|final|static|public|private|protected|abstract|class|interface|enum|record|extends|implements|new|this|super|import|package|if|else|switch|case|default|for|while|do|break|continue|return|true|false|null|try|catch|finally|throw|throws|instanceof)\b|` + HL_TAIL, 'gm'),
+  js: new RegExp(String.raw`(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|` + BT + String.raw`(?:\\.|[^\\` + BT + String.raw`])*` + BT + String.raw`)|(^#![^\n]*)|\b(let|const|var|function|return|if|else|switch|case|default|for|while|do|break|continue|of|in|new|this|class|extends|super|typeof|instanceof|true|false|null|undefined|NaN|Infinity|try|catch|finally|throw|async|await|import|export|from|delete|void|yield)\b|` + HL_TAIL, 'gm'),
   c: new RegExp(HL_HEAD + String.raw`\b(int|float|double|char|void|bool|long|short|unsigned|signed|const|struct|enum|typedef|union|static|extern|sizeof|if|else|switch|case|default|for|while|do|break|continue|return|true|false|NULL|FILE|size_t)\b|` + HL_TAIL, 'gm'),
   py: /(#[^\n]*)|((?:\b[rRbBfFuU]{1,2})?(?:"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'))|(^[ \t]*@[\w.]+)|\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|case|nonlocal|not|or|pass|raise|return|try|while|with|yield|self)\b|\b(0x[\da-fA-F]+|\d[\d_]*\.?\d*(?:e[+-]?\d+)?j?)\b|\b([A-Za-z_]\w*)(?=\s*\()/gm,
   cpp: new RegExp(HL_HEAD + String.raw`\b(int|float|double|char|void|bool|long|short|unsigned|signed|const|constexpr|struct|enum|typedef|union|static|extern|sizeof|if|else|switch|case|default|for|while|do|break|continue|return|true|false|nullptr|NULL|auto|class|public|private|protected|virtual|override|final|namespace|using|template|typename|new|delete|this|try|catch|throw|operator|friend|inline|size_t)\b|` + HL_TAIL, 'gm'),
@@ -179,6 +182,7 @@ function confetti() {
    online one (Wandbox) when hosted. C#: always online (courses marked online: true have nothing to run them locally).
    Python programs are wrapped by pywrap.js first, so input() echoes and syntax errors are reported separately. */
 const isPy = () => !!co().py;
+const wrapOf = () => (co().script ? window[co().script] : null);   // pyWrap or jsWrap for languages that are run, not compiled
 const LOCAL = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) && !/[?&]online\b/.test(location.search);
 const isOnline = () => !LOCAL || !!co().online;
 const BUSY = /OCI runtime error|Resource temporarily unavailable/;   // the free service ran out of room for a moment
@@ -196,7 +200,7 @@ async function wandboxOnce(code, stdin) {
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 40000);
   try {
     const r = await fetch('https://wandbox.org/api/compile.json', { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: isPy() ? window.pyWrap(code) : code, stdin, ...co().wandbox }) });
+      body: JSON.stringify({ code: wrapOf() ? wrapOf()(code) : co().prep ? co().prep(code) : code, stdin, ...co().wandbox }) });
     if (!r.ok) throw new Error('http ' + r.status);
     return await r.json();
   } catch (e) { if (e.name === 'AbortError') return { timedOut: true }; throw e; }
@@ -204,23 +208,24 @@ async function wandboxOnce(code, stdin) {
 }
 /* turn the online compiler's raw messages into what a local compiler would have printed */
 const TIDY = {
+  java: t => String(t || '').replace(/\bprog\.java\b/g, 'Main.java').trim(),
   c: t => String(t || '').replace(/\bprog\.c\b/g, 'main.c').trim(),
   cpp: t => String(t || '').replace(/\bprog\.cc\b/g, 'main.cpp').trim(),
   cs: t => [...new Set(String(t || '').split('\n').filter(l => /\b(error|warning) (CS|MSB)\d+/.test(l) && !/warning CS8[67]\d\d/.test(l))
     .map(l => l.replace(/^.*?(?=\(\d+,\d+\))/, 'Program.cs').replace(/\s*\[[^\]]*proj\]\s*$/, '').trim()))].join('\n'),
 };
-const FAILED = { c: /error:|ld returned|undefined reference/, cpp: /error:|ld returned|undefined reference/, cs: /\berror (CS|MSB)\d+/ };
+const FAILED = { java: /\berror:/, c: /error:|ld returned|undefined reference/, cpp: /error:|ld returned|undefined reference/, cs: /\berror (CS|MSB)\d+/ };
 async function runOnline(code, stdins) {
   const lang = S.course;
   const asRun = j => j.timedOut ? { stdout: '', stderr: '', code: 0, timedOut: true }
-    : { stdout: (j.program_output || '').replace(/\r/g, ''), stderr: (j.program_error || '').replace(/\r/g, ''), code: j.signal ? (/Segm/.test(j.signal) ? 139 : /Kill/.test(j.signal) ? 137 : 134) : +j.status || 0 };
+    : { stdout: (j.program_output || '').replace(/\r/g, ''), stderr: (j.program_error || '').replace(/\r/g, '').replace(/\bprog\.java\b/g, 'Main.java'), code: j.signal ? (/Segm/.test(j.signal) ? 139 : /Kill/.test(j.signal) ? 137 : 134) : +j.status || 0 };
   const first = await wandbox(code, stdins[0] || '');
   if (first.timedOut) return { compile: { ok: true, output: '' }, runs: stdins.map(() => asRun(first)) };
   let out = '';
-  if (isPy()) {                                                    // nothing to compile: a syntax error is reported by pywrap.js
+  if (wrapOf()) {                                                  // nothing to compile: a syntax error is reported by the wrapper
     if (isBusy(first)) throw new Error('busy');
     const err = String(first.program_error || '').replace(/\r/g, '');
-    if (err.startsWith(window.pyWrap.SYNTAX)) return { compile: { ok: false, output: err.slice(window.pyWrap.SYNTAX.length).trim() }, runs: [] };
+    if (err.startsWith(wrapOf().SYNTAX)) return { compile: { ok: false, output: err.slice(wrapOf().SYNTAX.length).trim() }, runs: [] };
   } else {
     out = TIDY[lang](first.compiler_message || ((first.compiler_output || '') + '\n' + (first.compiler_error || '')));
     if (first.status !== '0' && FAILED[lang].test(out)) return { compile: { ok: false, output: out }, runs: [] };
@@ -241,12 +246,14 @@ async function runCode(code, stdins) {
   } catch { return { offline: true }; }
 }
 /* wording that depends on the language: Python is run, the others are compiled */
-const W = () => isPy()
-  ? { service: 'online Python', busy: 'Running…', busyTests: 'Running tests…', says: 'Python says', warn: 'Python says', be: 'interpreter',
-      broken: '<p>Python cannot read it yet — that is a syntax error. The message points at the line (and often the exact spot with a <code>^</code>).</p>' }
+const W = () => wrapOf()
+  ? { service: 'online ' + co().name, busy: 'Running…', busyTests: 'Running tests…', says: esc(co().name) + ' says', warn: esc(co().name) + ' says', be: 'interpreter',
+      broken: `<p>${esc(co().name)} cannot read it yet — that is a syntax error. The message points at the line (and often the exact spot with a <code>^</code>).</p>` }
   : { service: 'online compiler', busy: 'Compiling…', busyTests: 'Compiling and running tests…', says: 'Compiler says', warn: 'Compiler warnings (worth reading!)', be: 'compiler',
       broken: '<p>It does not compile yet. Read the first error — the line number is right there.</p>' };
 const INSTALL = {
+  java: 'Install a JDK (for example Temurin from <code>adoptium.net</code>) so that <code>javac</code> works in a terminal',
+  js: 'JavaScript runs on the same Node.js that runs this site, so reinstalling Node.js should fix it',
   c: 'Install gcc (Bro Code shows how in the very first clip of the C course)',
   cpp: 'Install g++ (it comes with the same MSYS2 / MinGW package as gcc)',
   py: 'Install Python 3 from <code>python.org</code> (tick “Add python.exe to PATH” in the installer)',
@@ -256,6 +263,22 @@ const offMsg = () => isOnline()
   : `<div class="hintbox">🔌 <b>The code runner is not reachable.</b> Start the site by double-clicking <code>start.bat</code> (it runs your code with ${esc(co().tool)} on your own machine), then open <code>http://localhost:4321</code>.</div>`;
 const noccMsg = () => `<div class="hintbox">⚠️ <b>${esc(co().tool)} was not found on this computer.</b> ${INSTALL[S.course] || ''}, then restart <code>start.bat</code>.</div>`;
 const waitNote = () => isOnline() ? ` (${W().service} — this can take a few seconds)` : '';
+const JSERR = {
+  ReferenceError: '🔤 <b>ReferenceError</b> — JavaScript does not know that name. A typo, or used before it was declared with <code>let</code> or <code>const</code>?',
+  TypeError: '🧩 <b>TypeError</b> — you used a value in a way its type does not allow: calling something that is not a function, reading a property of <code>null</code> or <code>undefined</code>, or changing a <code>const</code>.',
+  RangeError: '🌀 <b>RangeError</b> — a number is outside what is allowed. Often runaway recursion (“Maximum call stack size exceeded”).',
+  SyntaxError: '✏️ <b>SyntaxError</b> — some text handed to JavaScript while running (for example <code>JSON.parse</code>) was not valid.',
+};
+const JAVAERR = {
+  ArithmeticException: '➗ <b>ArithmeticException</b> — usually a whole number divided by zero.',
+  ArrayIndexOutOfBoundsException: '📏 <b>ArrayIndexOutOfBoundsException</b> — past the end of the array. Indexes start at 0, so the last one is <code>length - 1</code>.',
+  StringIndexOutOfBoundsException: '📏 <b>StringIndexOutOfBoundsException</b> — past the end of the string. The last character is at <code>length() - 1</code>.',
+  NullPointerException: '🕳️ <b>NullPointerException</b> — you used a variable that holds <code>null</code> (nothing) as if it were an object.',
+  InputMismatchException: '⌨️ <b>InputMismatchException</b> — the Scanner expected one kind of input (say a number) and got another.',
+  NoSuchElementException: '⌨️ <b>NoSuchElementException</b> — the Scanner asked for more input than there was.',
+  NumberFormatException: '🔢 <b>NumberFormatException</b> — that text is not a number, so it could not be converted.',
+  StackOverflowError: '🌀 <b>StackOverflowError</b> — a method kept calling itself and never stopped.',
+};
 const PYERR = {
   NameError: '🔤 <b>NameError</b> — Python does not know that name. A typo, missing quotes around text, or used before it was given a value?',
   UnboundLocalError: '🔤 <b>UnboundLocalError</b> — you used a variable inside a function before assigning it there.',
@@ -274,14 +297,16 @@ const PYERR = {
 function crashNote(r) {
   if (r.timedOut || r.code === 137) return '⏱️ Timed out — infinite loop, or waiting for input that never comes?';
   if (r.flooded) return '🌊 Way too much output — probably an infinite loop.';
-  if (isPy()) {                                                    // Python names its errors on the last line of the traceback
-    const last = String(r.stderr || '').trim().split('\n').pop() || '', kind = (last.match(/^(\w+)(?::|$)/) || [])[1];
-    if (kind && PYERR[kind]) return PYERR[kind];
+  if (wrapOf()) {                                                  // Python and JavaScript name their errors on the last line
+    const last = String(r.stderr || '').trim().split('\n').pop() || '', kind = (last.match(/^(\w+)(?::|$)/) || [])[1], known = isPy() ? PYERR : JSERR;
+    if (kind && known[kind]) return known[kind];
     return r.code ? '💥 The program stopped with an error' + (kind ? ' (' + esc(kind) + ')' : '') + '.' : '';
   }
   if (r.code === 3221225477 || r.code === 139) return '💥 Segmentation fault — your program touched memory it does not own.';
   if (r.code === 3221225725) return '💥 Stack overflow — runaway recursion or a gigantic local array.';
   if (r.code === 3221225620 || r.code === 136) return '💥 Crash: division by zero.';
+  const je = /Exception in thread "[^"]*" ([\w.$]+)/.exec(r.stderr || '');                 // Java
+  if (je) { const kind = je[1].split('.').pop(); return JAVAERR[kind] || '💥 The program stopped with an exception (' + esc(kind) + '). Nothing caught it.'; }
   const ue = /Unhandled Exception[.:]?\s*([^\n]+)/i.exec(r.stderr || '');
   if (ue) return '💥 Unhandled exception — ' + esc(ue[1].trim()) + ' Nothing caught it, so the program stopped.';
   if (/terminate called/.test(r.stderr || '')) return '💥 An exception was thrown and never caught' + ((r.stderr.match(/what\(\):\s*([^\n]*)/) || [])[1] ? ': ' + esc(r.stderr.match(/what\(\):\s*([^\n]*)/)[1].trim()) : '') + '.';
@@ -290,7 +315,7 @@ function crashNote(r) {
   return '';
 }
 /* what went wrong in a run: Python's traceback (the others print theirs at compile time), then a plain-English note */
-const errBox = x => (isPy() && x.stderr ? `<div class="lbl">💥 Error</div><pre class="err">${esc(x.stderr.trim())}</pre>` : '') + (crashNote(x) ? `<p>${crashNote(x)}</p>` : '');
+const errBox = x => ((wrapOf() || co().showErr) && x.stderr ? `<div class="lbl">💥 Error</div><pre class="err">${esc(x.stderr.trim())}</pre>` : '') + (crashNote(x) ? `<p>${crashNote(x)}</p>` : '');
 
 /* code editor with live highlighting */
 function editor(code) {
@@ -383,7 +408,7 @@ const R = {
     $('.edw', n).append(ed.node);
     const out = $('.out', n), tests = s.tests || [{ in: '' }];
     const struggling = () => { $('.sol', n).hidden = !s.sol; $('.skip', n).hidden = false; };
-    const compileBox = r => r.compile.output ? `<div class="lbl">${r.compile.ok ? '⚠️ ' + W().warn : '❌ ' + W().says}</div><pre${isPy() ? ' class="err"' : ''}>${esc(r.compile.output)}</pre>` : '';
+    const compileBox = r => r.compile.output ? `<div class="lbl">${r.compile.ok ? '⚠️ ' + W().warn : '❌ ' + W().says}</div><pre${wrapOf() ? ' class="err"' : ''}>${esc(r.compile.output)}</pre>` : '';
     const guard = r => { if (r.offline) { out.innerHTML = offMsg(); struggling(); return true; } if (r.noCompiler) { out.innerHTML = noccMsg(); struggling(); return true; } return false; };
     $('.run', n).onclick = async () => {
       out.innerHTML = '<span class="muted">' + W().busy + waitNote() + '</span>';
@@ -426,7 +451,7 @@ const R = {
 let keyHandler = null;
 document.addEventListener('keydown', e => keyHandler && keyHandler(e));
 const PRAISE = ['Nice!', 'Correct!', 'Exactly right.', 'You are getting dangerous.', 'Clean.', 'Boom.'];
-const praise = () => { const all = PRAISE.concat(isPy() ? ['Very Pythonic.', 'No traceback in sight.'] : ['Compiles in my heart.', 'Zero warnings.']); return all[Math.floor(Math.random() * all.length)]; };
+const praise = () => { const all = PRAISE.concat(isPy() ? ['Very Pythonic.', 'No traceback in sight.'] : wrapOf() ? ['No errors in sight.', 'Runs first time.'] : ['Compiles in my heart.', 'Zero warnings.']); return all[Math.floor(Math.random() * all.length)]; };
 
 function session(o) {
   document.body.classList.add('in-session');
@@ -608,8 +633,8 @@ function vPlay() {
     const out = $('.out'); out.innerHTML = '<span class="muted">' + W().busy + waitNote() + '</span>';
     const r = await runCode(ed.value, [$('#stdin').value]);
     if (r.offline) { out.innerHTML = offMsg(); return; } if (r.noCompiler) { out.innerHTML = noccMsg(); return; }
-    let h = r.compile.output ? `<div class="lbl">${r.compile.ok ? '⚠️ Warnings' : '❌ ' + W().says}</div><pre${isPy() ? ' class="err"' : ''}>${esc(r.compile.output)}</pre>` : '';
-    if (r.compile.ok) { const x = r.runs[0]; h += `<div class="lbl">Output</div><pre>${esc(x.stdout) || '(no output)'}</pre>${errBox(x) || (isPy() ? '<span class="muted">✓ finished</span>' : `<span class="muted">exit code ${x.code}</span>`)}`; }
+    let h = r.compile.output ? `<div class="lbl">${r.compile.ok ? '⚠️ Warnings' : '❌ ' + W().says}</div><pre${wrapOf() ? ' class="err"' : ''}>${esc(r.compile.output)}</pre>` : '';
+    if (r.compile.ok) { const x = r.runs[0]; h += `<div class="lbl">Output</div><pre>${esc(x.stdout) || '(no output)'}</pre>${errBox(x) || (wrapOf() ? '<span class="muted">✓ finished</span>' : `<span class="muted">exit code ${x.code}</span>`)}`; }
     out.innerHTML = h;
   };
 }
@@ -750,7 +775,7 @@ function courseStats(cid) {
 }
 function courseCards() {
   return `<div class="courses">${CIDS.map(cid => { const { c, d, n, xp, pct } = courseStats(cid), on = S.course === cid;
-    return `<button class="course-card${on ? ' on' : ''}" data-c="${cid}" style="--cc:${c.color}"><span class="cbadge big" style="background:${c.color}">${esc(c.badge)}</span><span class="cc-body"><b>${esc(c.name)}</b><span class="muted">${esc(c.tagline)}</span><span class="pbar"><i style="width:${pct}%"></i></span><small>${hasTracks(cid) && S.start[cid] ? TRACKS[S.start[cid]].join(' ') + ' · ' : ''}${d} of ${n} lessons · ⚡ ${xp} XP${d === n ? ' · 👑 complete' : ''}</small></span><span class="cc-go">${on ? '✓ Learning' : d ? 'Continue' : 'Start'}</span></button>`; }).join('')}</div>`;
+    return `<button class="course-card${on ? ' on' : ''}" data-c="${cid}" style="--cc:${c.color}"><span class="cbadge big" style="background:${c.color}">${esc(c.badge)}</span><span class="cc-body"><b>${esc(c.name)}</b><span class="muted">${esc(c.tagline)}</span><span class="pbar"><i style="width:${pct}%"></i></span><small>${hasTracks(cid) && S.start[cid] ? TRACKS[S.start[cid]].join(' ') + ' · ' : ''}${d} of ${n} lessons · ⚡ ${xp} XP${d === n ? ' · 👑 complete' : ''}${c.preview ? ' · 🚧 first topic, more coming' : ''}</small></span><span class="cc-go">${on ? '✓ Learning' : d ? 'Continue' : 'Start'}</span></button>`; }).join('')}</div>`;
 }
 /* choosing a course: the first time, ask where to start */
 function pickCourse(cid) {
@@ -767,6 +792,8 @@ const GUIDE = [          // "Don't know which language is for you?"
   ['py', '🌱', 'I have never written code before', 'Start with Python. It reads almost like English, so you can focus on ideas instead of punctuation.'],
   ['c', '⚙️', 'I want to understand how computers really work', 'Start with C. It is small and close to the machine: memory, pointers, the lot. Every other language makes more sense afterwards.'],
   ['cpp', '🎮', 'I want to make fast games or software', 'Start with C++. It powers game engines like Unreal, browsers and anything that has to be quick.'],
+  ['js', '🌐', 'I want to build websites', 'Start with JavaScript. It is the language every web page runs, and you can see results quickly.'],
+  ['java', '☕', 'I am studying Java, or want to build Android apps', 'Start with Java. It is widely taught at school and university and used by big companies everywhere.'],
   ['cs', '🕹️', 'I want to build Unity games or Windows apps', 'Start with C#. It is the language of Unity, with a friendlier feel than C or C++.'],
 ];
 function vWelcome() {

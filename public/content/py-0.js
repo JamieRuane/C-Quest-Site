@@ -3,7 +3,7 @@
    Code challenges: tests are [{ in: 'typed input\n', out: 'exact output' | has: ['must contain'] | re: 'regex' }].
    input() echoes what was typed, like a terminal, so prompts and typed lines appear in the output. */
 course('py', {
-  name: 'Python', badge: 'Py', color: '#f5a300', video: 'ix9cRaBkVe0', glossTry: 'list', tool: 'Python', py: true,
+  name: 'Python', badge: 'Py', color: '#f5a300', video: 'ix9cRaBkVe0', glossTry: 'list', tool: 'Python', py: true, script: 'pyWrap',
   tagline: 'Readable, friendly and everywhere: scripts, data, AI, the web. The easiest place to start.',
   blank: '# Write your Python here\n',
   wandbox: { compiler: 'cpython-3.14.0' },
