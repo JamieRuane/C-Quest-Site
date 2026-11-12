@@ -32,6 +32,13 @@ const LANG = {
     fileLevel(code) { return /\bmain\s*\(/.test(code) ? null : this.incs + code + '\nint main() { return 0; }\n'; },
   },
   py: { tool: 'Python', comments: /#.*/g, wrap: code => code, syntaxOnly: true },
+  js: { tool: 'Node.js', comments: /\/\/.*|\/\*[\s\S]*?\*\//g, wrap: code => code, syntaxOnly: true },
+  java: {
+    tool: 'java', comments: /\/\/.*|\/\*[\s\S]*?\*\//g,
+    wrap(code) { return /\bclass\s+\w+/.test(code) ? code : 'import java.util.*;\npublic class Main {\n    public static void main(String[] args) {\n' + code + '\n    }\n}\n'; },
+    // a snippet that defines methods cannot sit inside main: try it at class level instead
+    fileLevel(code) { return /\bclass\s+\w+/.test(code) ? null : 'import java.util.*;\npublic class Main {\n' + code + '\n    public static void main(String[] args) {}\n}\n'; },
+  },
   cs: { tool: 'the online compiler', comments: /\/\/.*|\/\*[\s\S]*?\*\//g },
 };
 const norm = s => String(s).replace(/\r/g, '').split('\n').map(l => l.trimEnd()).join('\n').trim();
