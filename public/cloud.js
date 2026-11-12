@@ -90,7 +90,7 @@ if (Cloud.enabled) {
     if (EMU) {
       connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
       connectFirestoreEmulator(db, '127.0.0.1', 8080);
-      console.info('C Quest is using the local Firebase emulators.');
+      console.info('Code Quest is using the local Firebase emulators.');
     }
     const ref = () => doc(db, 'users', Cloud.user.uid);
     const boardRef = () => doc(db, 'leaderboard', Cloud.user.uid);

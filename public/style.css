@@ -19,7 +19,7 @@ code{background:#eceffe;border:1px solid #d9defa;border-radius:6px;padding:.05em
 #nav a i{font-style:normal;font-size:20px}
 #nav a:hover{background:var(--card2)}
 #nav a.on{background:#ddf4ff;border-color:#84d8ff;color:var(--blue)}
-#nav .logo{font-size:28px;font-weight:700;text-transform:none;color:var(--green);margin-bottom:14px;letter-spacing:0;gap:4px}
+#nav .logo{font-size:21px;font-weight:700;text-transform:none;white-space:nowrap;color:var(--green);margin-bottom:14px;letter-spacing:0;gap:4px}
 #nav .logo b{background:var(--green);color:#fff;border-radius:9px;padding:0 9px}
 #main{flex:1;min-width:0;display:flex;flex-direction:column}
 #top{display:flex;justify-content:flex-end;gap:10px;padding:14px 28px 0}
@@ -243,3 +243,43 @@ h2.sec{margin:28px 0 12px;font-size:20px}
   .foot-in{flex-direction:column;align-items:stretch}
   .foot-in .btn{width:100%}
 }
+
+/* language switcher */
+#top{position:relative}
+#st-course{margin-right:auto;display:flex;align-items:center;gap:8px;font:inherit;font-weight:800;font-size:15px;color:var(--text);cursor:pointer}
+#st-course:hover{border-color:#84d8ff}
+#st-course .caret{color:var(--muted);font-size:12px}
+.cbadge{display:inline-grid;place-items:center;min-width:36px;height:26px;padding:0 7px;border-radius:8px;color:#fff;font:800 13px/1 var(--mono);letter-spacing:0;flex:none}
+.cbadge.big{min-width:64px;height:64px;border-radius:18px;font-size:24px}
+.cmenu{position:absolute;top:100%;left:28px;margin-top:8px;background:var(--card);border:2px solid var(--line);border-radius:16px;padding:8px;z-index:40;min-width:260px;box-shadow:0 12px 32px rgba(60,70,120,.22);animation:pop .15s}
+.cmenu-h{font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:6px 10px}
+.cmenu button{display:flex;align-items:center;gap:12px;width:100%;font:inherit;color:var(--text);background:none;border:2px solid transparent;border-radius:12px;padding:9px 10px;cursor:pointer;text-align:left}
+.cmenu button:hover{background:var(--card2)}
+.cmenu button.on{background:#ddf4ff;border-color:#84d8ff}
+.cmenu button span:nth-child(2){flex:1;display:flex;flex-direction:column;line-height:1.25}
+.cmenu button small{color:var(--muted);font-weight:600}
+.cmenu button i{font-style:normal;font-weight:900;color:var(--blue)}
+.cmenu a{display:block;padding:9px 10px 5px;font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;border-top:2px solid var(--line);margin-top:6px}
+.courses{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.course-card{display:flex;align-items:center;gap:16px;font:inherit;color:var(--text);text-align:left;background:var(--card);border:2px solid var(--line);border-bottom-width:5px;border-radius:20px;padding:18px;cursor:pointer}
+.course-card:hover{border-color:var(--cc)}
+.course-card:active{transform:translateY(2px);border-bottom-width:3px}
+.course-card.on{border-color:var(--cc);background:linear-gradient(0deg,color-mix(in srgb,var(--cc) 9%,#fff),#fff)}
+.cc-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.cc-body b{font:700 22px/1.1 "Fredoka","Geist",sans-serif}
+.cc-body .muted{font-size:14px;line-height:1.35}
+.cc-body .pbar{display:block;margin-top:4px}
+.cc-body .pbar i{display:block;background:var(--cc)}
+.cc-body small{color:var(--muted);font-weight:700}
+.cc-go{font-weight:900;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--cc);white-space:nowrap}
+@media(max-width:900px){
+  #top{gap:6px;flex-wrap:wrap}
+  #st-course .cname{display:none}
+  .cmenu{left:16px}
+  .course-card{flex-wrap:wrap}
+}
+.trackline{margin:0 0 14px;font-weight:800;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.trackline a{font-weight:700;text-transform:none;letter-spacing:0}
+
+/* Python error output */
+.out pre.err{background:#2a1620;color:#ffd0d6;border-color:#ffb4c0}

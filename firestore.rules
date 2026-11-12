@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// C Quest - Firestore security rules
+// Code Quest - Firestore security rules
 //
 // Data model
 //   /users/{uid}         private progress, readable only by its owner
