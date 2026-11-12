@@ -8,7 +8,7 @@
     "test:rules": "firebase emulators:exec --only firestore --project demo-c-quest \"node --test tests/firestore.rules.test.js\"",
     "emulators": "firebase emulators:start --only auth,firestore --project demo-c-quest",
     "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes",
-    "test:unit": "node --test tests/migrate.test.js",
+    "test:unit": "node --test tests/migrate.test.js tests/connections.test.js",
     "test": "npm run test:unit && npm run verify"
   },
   "devDependencies": {

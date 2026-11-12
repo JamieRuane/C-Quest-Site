@@ -74,7 +74,7 @@ function applyTracks() {
 }
 
 /* ---------- state ---------- */
-const DEF = { xp: 0, done: {}, quiz: {}, streak: 0, best: 0, last: null, days: {}, bookmarks: {}, mistakes: {}, ach: {}, solved: {}, perfect: 0, cleared: 0, goal: 30, sound: true, unlockAll: false, play: {}, owner: null, course: null, cxp: {}, start: {}, later: false, v: 2 };
+const DEF = { xp: 0, done: {}, quiz: {}, streak: 0, best: 0, last: null, days: {}, bookmarks: {}, mistakes: {}, ach: {}, solved: {}, perfect: 0, cleared: 0, goal: 30, sound: true, unlockAll: false, play: {}, owner: null, course: null, cxp: {}, start: {}, later: false, connect: {}, v: 2 };
 /* every saved copy (this browser, the account, an imported backup) goes through migrateState first: see migrate.js */
 const upgrade = saved => Object.assign(structuredClone(DEF), window.migrateState(saved, CIDS));
 let S = load();
@@ -124,6 +124,8 @@ const ACH = [
   ['pydone', '🐍', 'Pythonista', 'Finish every Python lesson', s => allDone(s, 'py')],
   ['cpp', '➕', 'Plus plus', 'Finish every C++ lesson', s => allDone(s, 'cpp')],
   ['cs', '🎼', 'Looking sharp', 'Finish every C# lesson', s => allDone(s, 'cs')],
+  ['conn', '🧩', 'Connected', 'Solve a Connections puzzle', s => Object.values(s.connect || {}).some(r => r.won)],
+  ['connperf', '🎯', 'No mistakes', 'Solve a Connections puzzle without a mistake', s => Object.values(s.connect || {}).some(r => r.won && !r.mistakes)],
   ['boss', '👑', 'Polyglot', 'Finish every course', s => CIDS.every(c => allDone(s, c))],
 ];
 
@@ -650,6 +652,122 @@ function vGlossary() {
   $('.search').oninput = e => draw(e.target.value.toLowerCase()); draw('');
 }
 
+/* ---------- Connections: sixteen tiles hide four groups of four (puzzles live in connections.js) ---------- */
+const PUZZLES = window.CONNECTIONS || [];
+const CN_SQUARE = ['🟨', '🟩', '🟦', '🟪'], CN_LIVES = 4;
+const wait = ms => new Promise(r => setTimeout(r, ms));
+/* Slide tiles from where they were to where they are now (used for shuffling and for a found group moving up). */
+function slideTiles(box, change) {
+  const before = new Map($$('.cn-tile', box).map(e => [e.dataset.t, e.getBoundingClientRect()]));
+  change();
+  $$('.cn-tile', box).forEach(e => {
+    const a = before.get(e.dataset.t); if (!a) return;
+    const b = e.getBoundingClientRect(), dx = a.left - b.left, dy = a.top - b.top;
+    if (!dx && !dy) return;
+    e.style.transition = 'none'; e.style.transform = `translate(${dx}px,${dy}px)`;
+    void e.offsetWidth;
+    e.style.transition = 'transform .45s cubic-bezier(.3,.7,.3,1)'; e.style.transform = '';
+  });
+}
+const cnStatus = id => { const r = S.connect[id]; return !r ? ['new', 'Not played yet'] : r.won ? ['won', r.mistakes ? `Solved · ${r.mistakes} mistake${r.mistakes > 1 ? 's' : ''}` : 'Solved · perfect!'] : ['lost', 'Not solved — try again']; };
+function vConnectList() {
+  const won = PUZZLES.filter(p => S.connect[p.id] && S.connect[p.id].won).length;
+  view.innerHTML = `<div class="page"><h1>🧩 Connections</h1><p class="lead">Sixteen tiles, four hidden groups of four. Keywords, symbols and trivia from the most popular programming languages — you will meet a few you have not learned yet. ${won} of ${PUZZLES.length} solved.</p>
+    <div class="cn-list">${PUZZLES.map((p, i) => { const [k, label] = cnStatus(p.id); return `<a class="cn-card ${k}" href="#/connect/${p.id}"><span class="cn-num">${k === 'won' ? '✓' : i + 1}</span><span><b>${esc(p.name)}</b><small>${label}</small></span></a>`; }).join('')}</div>
+    <div class="card" style="margin-top:20px"><h3>How to play</h3><p class="muted" style="margin:0">Tap four tiles you think belong together, then press <b>Submit</b>. Groups are coloured by difficulty: 🟨 easiest, then 🟩, 🟦, and 🟪 trickiest. You can make four mistakes. Watch out: some tiles look like they fit in more than one group.</p></div></div>`;
+}
+function vConnect(id) {
+  const pz = PUZZLES.find(p => p.id === id);
+  if (!pz) { location.hash = '#/connect'; return; }
+  const idx = PUZZLES.indexOf(pz), nextPz = PUZZLES.slice(idx + 1).concat(PUZZLES.slice(0, idx)).find(p => !(S.connect[p.id] && S.connect[p.id].won));
+  let left, solved, sel, lives, guesses, tried, busy, over, result;
+  const start = () => { left = shuffle(pz.groups.flatMap((g, gi) => g.items.map(t => ({ t, g: gi })))); solved = []; sel = new Set(); lives = CN_LIVES; guesses = []; tried = new Set(); busy = false; over = false; result = null; };
+  start();
+  const saved = S.connect[id];
+  if (saved && saved.won) { left = []; solved = [0, 1, 2, 3]; over = true; lives = CN_LIVES - saved.mistakes; guesses = saved.guesses || []; result = { won: true, replayed: true }; }   // already solved: show the answers
+
+  view.innerHTML = `<div class="cn"><a class="back" href="#/connect">← All puzzles</a><h1>🧩 ${esc(pz.name)}</h1><p class="cn-sub">Create four groups of four!</p><div class="cn-board"></div><div class="cn-lives"></div><div class="cn-btns"></div><div class="cn-result"></div></div>`;
+  const board = $('.cn-board'), tileEl = t => $$('.cn-tile', board).find(e => e.dataset.t === t);
+  const size = t => (t.length > 16 ? ' xs' : t.length > 11 ? ' sm' : '');
+
+  function draw() {
+    board.innerHTML = solved.map(gi => { const g = pz.groups[gi]; return `<div class="cn-group l${gi}"><b>${esc(g.title)}</b><span>${g.items.map(esc).join(', ')}</span><small>${esc(g.note)}</small></div>`; }).join('')
+      + `<div class="cn-grid">${left.map(x => `<button class="cn-tile${size(x.t)}${sel.has(x.t) ? ' sel' : ''}" data-t="${esc(x.t)}">${esc(x.t)}</button>`).join('')}</div>`;
+    $$('.cn-tile', board).forEach(b => { b.onclick = () => {
+      if (busy || over) return;
+      const t = b.dataset.t;
+      if (sel.has(t)) sel.delete(t); else if (sel.size < 4) sel.add(t); else return;
+      b.classList.toggle('sel', sel.has(t)); controls();
+    }; });
+    controls();
+  }
+  function controls() {
+    $('.cn-lives').innerHTML = over ? '' : `Mistakes remaining: ${Array.from({ length: CN_LIVES }, (_, i) => `<i class="${i < lives ? '' : 'gone'}"></i>`).join('')}`;
+    $('.cn-btns').innerHTML = over ? '' : `<button class="btn ghost" id="cn-shuffle">Shuffle</button><button class="btn ghost" id="cn-clear"${sel.size ? '' : ' disabled'}>Deselect all</button><button class="btn primary" id="cn-submit"${sel.size === 4 ? '' : ' disabled'}>Submit</button>`;
+    if (over) return showResult();
+    $('#cn-shuffle').onclick = () => { if (!busy) slideTiles(board, () => { left = shuffle(left); draw(); }); };
+    $('#cn-clear').onclick = () => { if (!busy) { sel.clear(); draw(); } };
+    $('#cn-submit').onclick = submit;
+  }
+  async function found(gi) {                       // the four tiles slide to the top row, then merge into a coloured bar
+    slideTiles(board, () => { left = left.filter(x => x.g === gi).concat(left.filter(x => x.g !== gi)); draw(); });
+    await wait(480);
+    left = left.filter(x => x.g !== gi); solved.push(gi); sel.clear(); draw();
+    await wait(380);
+  }
+  async function submit() {
+    if (busy || over || sel.size !== 4) return;
+    const pick = left.filter(x => sel.has(x.t)), key = pick.map(x => x.t).sort().join('|');
+    if (tried.has(key)) { toast('Already guessed!'); return; }
+    busy = true; tried.add(key);
+    const els = pick.map(x => tileEl(x.t));
+    els.forEach((e, i) => { e.style.animation = `cn-hop .34s ${i * 90}ms`; });      // the little hop, one tile after another
+    await wait(340 + 3 * 90 + 120);
+    els.forEach(e => { e.style.animation = ''; });
+    const counts = [0, 0, 0, 0]; pick.forEach(x => counts[x.g]++);
+    const gi = counts.indexOf(4);
+    guesses.push(pick.map(x => x.g));
+    if (gi >= 0) {
+      beep([660, 880]);
+      await found(gi);
+      if (!left.length) finish(true);
+    } else {
+      lives--; beep([200, 150]);
+      els.forEach(e => e.classList.add('cn-shake'));
+      if (Math.max(...counts) === 3) toast('One away…');
+      controls();
+      await wait(450);
+      els.forEach(e => e.classList.remove('cn-shake'));
+      if (lives <= 0) {                             // out of guesses: reveal what was left, easiest first
+        sel.clear(); draw();
+        for (const g of [0, 1, 2, 3].filter(g => !solved.includes(g))) { left.forEach(x => { if (x.g === g) sel.add(x.t); }); draw(); await wait(350); await found(g); }
+        finish(false);
+      }
+    }
+    busy = false;
+  }
+  function finish(won) {
+    over = true;
+    const mistakes = CN_LIVES - lives, before = S.connect[id], firstWin = won && !(before && before.won);
+    const xp = firstWin ? 10 + (mistakes ? 0 : 5) : before ? 0 : 2;
+    if (!before || firstWin) S.connect[id] = { won, mistakes, guesses, at: Date.now() };
+    let fresh = [];
+    if (xp) fresh = award(xp); else { fresh = checkAch(); }
+    if (won) { beep([523, 659, 784, 1047], .13); confetti(); }
+    result = { won, mistakes, xp, fresh };
+    controls();
+  }
+  function showResult() {
+    const r = result, grid = guesses.map(row => row.map(g => CN_SQUARE[g]).join('')).join('<br>');
+    const title = r.replayed ? 'Already solved' : !r.won ? 'Next time!' : r.mistakes ? 'Solved!' : 'Perfect!';
+    const sub = r.replayed ? 'Here are the groups again.' : !r.won ? 'The groups are shown above. Have another go — it is the only way to win it.' : r.mistakes ? `With ${r.mistakes} mistake${r.mistakes > 1 ? 's' : ''}.` : 'Not a single mistake.';
+    $('.cn-result').innerHTML = `<div class="card"><h2>${title}</h2><p class="muted">${sub}</p>${grid ? `<div class="cn-squares">${grid}</div>` : ''}${r.xp ? `<p><b>⚡ +${r.xp} XP</b></p>` : ''}${(r.fresh || []).map(a => `<p class="toast" style="display:inline-block">${a[1]} Achievement unlocked: <b>${a[2]}</b></p>`).join('')}
+      <div class="cn-btns">${r.won ? '' : '<button class="btn" id="cn-again">Try again</button>'}${nextPz ? `<a class="btn primary" href="#/connect/${nextPz.id}">Next puzzle</a>` : ''}<a class="btn ghost" href="#/connect">All puzzles</a>${r.won ? '<button class="btn ghost" id="cn-again">Play again</button>' : ''}</div></div>`;
+    $('#cn-again').onclick = () => { start(); $('.cn-result').innerHTML = ''; draw(); };
+  }
+  draw();
+}
+
 /* ---------- leaderboard ---------- */
 const STALE_MS = 2 * 86400000;      // no save for 2 days = the streak has lapsed
 const boardStreak = e => (Date.now() - e.updatedAtMs > STALE_MS ? 0 : e.streak);
@@ -867,6 +985,7 @@ function route() {
   else if (r === 'glossary') vGlossary();
   else if (r === 'me') vMe();
   else if (r === 'board') vBoard();
+  else if (r === 'connect') { if (p[1]) vConnect(p[1]); else vConnectList(); }
   else vHome();
   hud();
 }
