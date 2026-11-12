@@ -71,7 +71,7 @@ function applyTracks() {
 }
 
 /* ---------- state ---------- */
-const DEF = { xp: 0, done: {}, quiz: {}, streak: 0, best: 0, last: null, days: {}, bookmarks: {}, mistakes: {}, ach: {}, solved: {}, perfect: 0, cleared: 0, goal: 30, sound: true, unlockAll: false, play: {}, owner: null, course: null, cxp: {}, start: {}, v: 2 };
+const DEF = { xp: 0, done: {}, quiz: {}, streak: 0, best: 0, last: null, days: {}, bookmarks: {}, mistakes: {}, ach: {}, solved: {}, perfect: 0, cleared: 0, goal: 30, sound: true, unlockAll: false, play: {}, owner: null, course: null, cxp: {}, start: {}, later: false, v: 2 };
 /* every saved copy (this browser, the account, an imported backup) goes through migrateState first: see migrate.js */
 const upgrade = saved => Object.assign(structuredClone(DEF), window.migrateState(saved, CIDS));
 let S = load();
@@ -762,6 +762,34 @@ function pickCourse(cid) {
 function wireCourseCards() {
   $$('.course-card[data-c]').forEach(b => { b.onclick = () => pickCourse(b.dataset.c); });
 }
+/* ---------- welcome: what a first-time visitor sees until they pick a language ---------- */
+const GUIDE = [          // "Don't know which language is for you?"
+  ['py', '🌱', 'I have never written code before', 'Start with Python. It reads almost like English, so you can focus on ideas instead of punctuation.'],
+  ['c', '⚙️', 'I want to understand how computers really work', 'Start with C. It is small and close to the machine: memory, pointers, the lot. Every other language makes more sense afterwards.'],
+  ['cpp', '🎮', 'I want to make fast games or software', 'Start with C++. It powers game engines like Unreal, browsers and anything that has to be quick.'],
+  ['cs', '🕹️', 'I want to build Unity games or Windows apps', 'Start with C#. It is the language of Unity, with a friendlier feel than C or C++.'],
+];
+function vWelcome() {
+  document.body.classList.add('landing');
+  const C = window.Cloud, canSignIn = !!(C && C.enabled);
+  const account = !canSignIn ? ''
+    : C.user ? `<div class="wl-account done">✓ Signed in as <b>${esc(C.user.displayName || C.user.email || 'you')}</b> — your progress will be saved to your account.</div>`
+    : S.later ? '<div class="wl-account done">No problem — you can sign in any time from <b>Profile</b>. Until then, progress is saved in this browser.</div>'
+    : `<div class="wl-account"><div><b>Already have an account, or want to save your progress?</b><span class="muted">Log in with Google to keep your XP and streak on any device. It is free and optional.</span></div><span class="wl-btns"><button class="btn primary" id="wl-login">Log in now</button><button class="btn ghost" id="wl-later">Maybe later</button></span></div>`;
+  view.innerHTML = `<div class="welcome">
+    <div class="wl-hero"><span class="wl-logo">&lt;/&gt;</span><h1>Welcome to Code Quest!</h1><p class="lead">Learn to code by doing: bite-sized lessons, real code you run yourself, and a streak to keep you coming back.</p></div>
+    ${account}
+    <h2 class="wl-h">Choose a language!</h2>
+    ${courseCards()}
+    <details class="wl-guide"><summary>🤔 Don't know which language is for you?</summary>
+      <p class="muted">Pick the line that sounds most like you. You can switch or learn more than one later, and your XP and streak carry across.</p>
+      ${GUIDE.filter(g => COURSES[g[0]]).map(([cid, icon, who, why]) => `<button class="wl-pick" data-c="${cid}" style="--cc:${COURSES[cid].color}"><i>${icon}</i><span><b>${who}</b><span class="muted">${why}</span></span><em>Start ${esc(COURSES[cid].name)} →</em></button>`).join('')}
+    </details></div>`;
+  wireCourseCards();
+  $$('.wl-pick').forEach(b => { b.onclick = () => pickCourse(b.dataset.c); });
+  if ($('#wl-login')) $('#wl-login').onclick = signIn;
+  if ($('#wl-later')) $('#wl-later').onclick = () => { S.later = true; save(); vWelcome(); };
+}
 function vCourses() {
   const started = CIDS.filter(c => hasTracks(c) && S.start[c]);
   view.innerHTML = `<div class="page"><h1>🌍 I want to learn…</h1><p class="lead">Pick a language to start with. Every course begins at the very first line of code — and if you already know some C, the C++ and C# courses can skip straight to what is <b>different</b>.</p>${courseCards()}${started.length ? `<p style="margin-top:14px">${started.map(c => `<a href="#/start/${c}">Change where ${esc(COURSES[c].name)} starts</a>`).join(' · ')}</p>` : ''}<p class="muted" style="margin-top:14px">You can learn more than one. Switch any time with the language button at the top of the page. Lessons, quizzes, bookmarks and mistakes are kept separately for each language; your XP, streak and achievements are shared.</p></div>`;
@@ -797,10 +825,10 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu();
 
 /* ---------- router ---------- */
 function route() {
-  keyHandler = null; closeMenu(); document.body.classList.remove('in-session'); window.scrollTo(0, 0);
+  keyHandler = null; closeMenu(); document.body.classList.remove('in-session', 'landing'); window.scrollTo(0, 0);
   const p = location.hash.replace(/^#\/?/, '').split('/'), r = p[0] || 'home';
   $$('#nav a[data-r]').forEach(a => a.classList.toggle('on', a.dataset.r === (['lesson', 'quiz'].includes(r) ? 'home' : r === 'review' ? 'bookmarks' : r)));
-  if (!S.course && !['lesson', 'quiz', 'review', 'start'].includes(r)) { hud(); return vCourses(); }      // first visit: pick a language
+  if (!S.course && !['lesson', 'quiz', 'review', 'start'].includes(r)) { hud(); return vWelcome(); }      // first visit: welcome + pick a language
   if (r === 'lesson') vLesson(p.slice(1).join('/'));
   else if (r === 'quiz') vQuiz(p.slice(1).join('/'));
   else if (r === 'courses') vCourses();

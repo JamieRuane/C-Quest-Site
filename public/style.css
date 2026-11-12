@@ -26,6 +26,7 @@ code{background:#eceffe;border:1px solid #d9defa;border-radius:6px;padding:.05em
 .stat{font-weight:800;padding:6px 12px;border-radius:12px;background:var(--card);border:2px solid var(--line);font-size:15px}
 #view{padding:20px 28px 60px;max-width:1080px;width:100%;margin:0 auto}
 body.in-session #nav,body.in-session #top{display:none}
+body.landing #nav,body.landing #top{display:none}
 body.in-session #view{padding:0;max-width:none;height:100vh}
 
 /* buttons */
@@ -283,3 +284,30 @@ h2.sec{margin:28px 0 12px;font-size:20px}
 
 /* Python error output */
 .out pre.err{background:#2a1620;color:#ffd0d6;border-color:#ffb4c0}
+
+/* welcome page (first visit) */
+.welcome{max-width:860px;margin:0 auto;padding:4vh 0 40px}
+.wl-hero{text-align:center;margin-bottom:26px}
+.wl-logo{display:inline-grid;place-items:center;width:76px;height:76px;border-radius:22px;background:var(--green);color:#fff;font:800 28px/1 var(--mono);box-shadow:0 6px 0 var(--green-d);margin-bottom:18px}
+.wl-hero h1{font:700 44px/1.1 "Fredoka","Geist",sans-serif;margin:0 0 10px}
+.wl-hero .lead{max-width:560px;margin:0 auto}
+.wl-h{font:700 26px/1.2 "Fredoka","Geist",sans-serif;text-align:center;margin:30px 0 16px}
+.wl-account{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--card);border:2px solid var(--line);border-top:5px solid var(--blue);border-radius:18px;padding:16px 18px;box-shadow:0 4px 14px rgba(90,100,160,.08)}
+.wl-account>div{display:flex;flex-direction:column;gap:2px;flex:1;min-width:240px}
+.wl-account.done{display:block;border-top-color:var(--green);text-align:center}
+.wl-btns{display:flex;gap:8px;flex-wrap:wrap}
+.wl-guide{margin-top:22px;background:var(--card);border:2px solid var(--line);border-radius:18px;padding:4px 18px}
+.wl-guide summary{cursor:pointer;font:600 19px/1.3 "Fredoka","Geist",sans-serif;padding:14px 0;list-style-position:inside}
+.wl-guide[open]{padding-bottom:16px}
+.wl-guide p{margin:0 0 12px}
+.wl-pick{display:flex;align-items:center;gap:14px;width:100%;font:inherit;color:var(--text);text-align:left;background:var(--card2);border:2px solid transparent;border-radius:14px;padding:12px 14px;margin-top:8px;cursor:pointer}
+.wl-pick:hover{border-color:var(--cc);background:#fff}
+.wl-pick i{font-style:normal;font-size:26px;flex:none}
+.wl-pick>span{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.wl-pick .muted{font-size:14px;line-height:1.4}
+.wl-pick em{font-style:normal;font-weight:900;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--cc);white-space:nowrap}
+@media(max-width:900px){
+  .wl-hero h1{font-size:34px}
+  .wl-pick{flex-wrap:wrap}
+  .wl-btns,.wl-btns .btn{width:100%}
+}
