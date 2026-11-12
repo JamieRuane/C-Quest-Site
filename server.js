@@ -1,12 +1,14 @@
-// C Quest — tiny zero-dependency server. Serves the site and runs your C code with your local gcc.
+// Code Quest — tiny zero-dependency server. Serves the site and runs your code with the tools on this machine:
+// gcc for C, g++ for C++ and Python for Python. (C# is compiled by the online compiler, straight from the browser.)
 // Only listens on 127.0.0.1, so nothing outside this computer can reach it.
 const http = require('http'), fs = require('fs'), path = require('path');
-const { compileAndRun, findCompiler } = require('./runner');
+const { run, findTool, LANGS } = require('./runner');
 
 const PORT = +process.env.PORT || 4321;
 const ROOT = path.join(__dirname, 'public');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon' };
 const LOCAL = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`]);
+const NAMES = { c: 'C', cpp: 'C++', py: 'Python' };
 
 const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
 
@@ -16,8 +18,7 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
 
   if (url.pathname === '/api/health') {
-    const cc = findCompiler();
-    return json(res, 200, { compiler: cc ? cc.version : null });
+    return json(res, 200, Object.fromEntries(LANGS.map(l => [l, (findTool(l) || {}).version || null])));
   }
 
   if (url.pathname === '/api/run') {
@@ -27,9 +28,9 @@ http.createServer(async (req, res) => {
     let body = '';
     for await (const chunk of req) { body += chunk; if (body.length > 200000) return json(res, 413, { error: 'too large' }); }
     try {
-      const { code, stdins } = JSON.parse(body);
-      if (typeof code !== 'string') throw new Error('bad request');
-      return json(res, 200, await compileAndRun(code, Array.isArray(stdins) ? stdins : ['']));
+      const { code, stdins, lang = 'c' } = JSON.parse(body);
+      if (typeof code !== 'string' || !LANGS.includes(lang)) throw new Error('bad request');
+      return json(res, 200, await run(lang, code, Array.isArray(stdins) ? stdins : ['']));
     } catch (e) { return json(res, 400, { error: String(e.message || e) }); }
   }
 
@@ -41,8 +42,11 @@ http.createServer(async (req, res) => {
     res.end(data);
   });
 }).listen(PORT, '127.0.0.1', () => {
-  const cc = findCompiler();
-  console.log(`\n  C Quest is running:  http://localhost:${PORT}\n`);
-  console.log(cc ? `  Compiler: ${cc.version}` : '  WARNING: no C compiler (gcc) found - coding exercises will not run.');
-  console.log('  Leave this window open while you learn. Press Ctrl+C to stop.\n');
+  console.log(`\n  Code Quest is running:  http://localhost:${PORT}\n`);
+  for (const l of LANGS) {
+    const t = findTool(l);
+    console.log(`  ${NAMES[l].padEnd(7)} ${t ? t.version : 'NOT FOUND - ' + NAMES[l] + ' coding exercises will not run on this machine'}`);
+  }
+  console.log('  C#      runs on the online compiler (needs an internet connection)');
+  console.log('\n  Leave this window open while you learn. Press Ctrl+C to stop.\n');
 });

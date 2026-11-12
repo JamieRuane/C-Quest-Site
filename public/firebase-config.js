@@ -1,4 +1,4 @@
-// Firebase configuration for C Quest
+// Firebase configuration for Code Quest
 window.FIREBASE_CONFIG = {
   apiKey: "AIzaSyB0fN5GGFiRj5b1KETSP0Hps_HoLJ4TNqw",
   authDomain: "c-quest-e9a23.firebaseapp.com",

@@ -1,4 +1,4 @@
-# Putting C Quest online with accounts
+# Putting Code Quest online with accounts
 
 Everything here is free. It takes about 15 minutes, once.
 
@@ -9,7 +9,7 @@ Everything here is free. It takes about 15 minutes, once.
 | The website | GitHub Pages | Deployed automatically from the `public/` folder on every push to `main` |
 | Accounts | Firebase Authentication | "Sign in with Google" |
 | Saved progress | Firebase Firestore | One small document per user (`users/<their id>`) |
-| Running C code | Wandbox (free public compiler) | Used when the site is online. `start.bat` still uses your own gcc |
+| Running code | Wandbox (free public compiler) | Used when the site is online, and always for C#. `start.bat` uses your own gcc, g++ and Python |
 
 Until step 1 is done the site works exactly as before: no accounts, progress kept in the browser.
 
@@ -61,7 +61,8 @@ Firebase only accepts sign-ins from addresses you list.
 - When a guest signs in for the first time, the progress they already earned is moved into their account.
 - After that, progress is saved to the account a moment after every change and loaded on any device they sign in on.
 - Signing out clears the progress from that browser (it is safe in the account), so shared computers do not mix people up.
-- What is stored per user: their Google name and email (held by Firebase Authentication) and one progress document.
+- What is stored per user: their Google name and email (held by Firebase Authentication) and one progress document covering every language.
+- Progress saved before the site became Code Quest (when it only taught C) is upgraded automatically the first time it is loaded: see `public/migrate.js`.
 
 ## Changing the security rules
 
@@ -127,6 +128,6 @@ Then open `http://localhost:4321/?emulator` (with `start.bat` running). The site
 
 - **The online compiler is a free shared service.** Each run takes a few seconds, and it can occasionally be busy or down.
   Only the code challenges and the Playground depend on it; everything else keeps working.
-- **Code is sent to Wandbox** when someone presses Run or Check on the hosted site. Nothing is sent when you use `start.bat`.
+- **Code is sent to Wandbox** when someone presses Run or Check on the hosted site. From `start.bat`, C, C++ and Python run on your own machine and nothing is sent; C# has no local compiler, so it is always sent.
 - **Testing the online compiler locally:** open `http://localhost:4321/?online` to force it.
 - **Free limits:** Firebase's free plan allows far more sign-ins and saves than a small site will use.
