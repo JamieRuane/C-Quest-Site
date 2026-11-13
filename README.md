@@ -1,6 +1,6 @@
 # Code Quest
 
-Duolingo-style courses that teach programming by doing. Seven languages, one account:
+Duolingo-style courses that teach programming by doing. Eight languages, one account:
 
 | Course | Lessons | Starts from | Runs your code with |
 |---|---|---|---|
@@ -8,8 +8,9 @@ Duolingo-style courses that teach programming by doing. Seven languages, one acc
 | **Python** | 46 | The very first line of code | Python 3 |
 | **C++** | 29 | The beginning, or "I already know some C" | g++ |
 | **C#** | 28 | The beginning, or "I already know some C" | Online compiler (Mono) |
-| **JavaScript** | 4 (first topic; more coming) | The very first line of code | Node.js |
-| **Java** | 4 (first topic; more coming) | The very first line of code | The JDK (`javac` / `java`) |
+| **JavaScript** | 32 | The very first line of code | Node.js |
+| **Java** | 32 | The very first line of code | The JDK (`javac` / `java`) |
+| **Go** | 23 | The very first line of code | Online compiler (Go 1.23) |
 | **SQL** | 35 | The very first query | SQLite in the browser ([sql.js](https://sql.js.org)), nothing to install |
 
 Every course has a lesson path, quizzes, a Practice deck built from your own mistakes, bookmarks,
@@ -20,7 +21,7 @@ leaderboard are shared across languages; lessons, quizzes, bookmarks and mistake
 
 Needs [Node.js](https://nodejs.org). For code challenges you also need the tool for the language you are
 learning: gcc (C), g++ (C++), [Python 3](https://www.python.org) or a JDK (Java). JavaScript runs on Node.js itself,
-and C# always uses the online compiler.
+and C# and Go always use the online compiler.
 
 Double-click `start.bat`, or:
 
@@ -55,6 +56,9 @@ node tools/verify.js py loops    # one course, one topic
 npm run test:unit                # saved-progress upgrade (migrate.js)
 npm run test:rules               # database security rules (needs Java for the emulator)
 ```
+
+Go has no local compiler either, so `tools/verify.js` runs every Go exercise on the online compiler
+(it needs an internet connection and takes a few minutes).
 
 C# cannot be compiled locally, so `tools/verify.js` only checks its structure. To run every C# exercise
 on the online compiler, start the site, open the browser console and run `await import('./verify-cs.js')`
