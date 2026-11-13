@@ -177,10 +177,6 @@ function hud() {
   const cc = co(), cb = $('#st-course');
   cb.hidden = !S.course;
   cb.innerHTML = `${badge(cc)}<span class="cname">${esc(cc.name)}</span><span class="caret">▾</span>`;
-  const brand = S.course ? cc.color : '#58cc02';
-  const lb = $('#logo-b');
-  if (S.course && cc.logo) { lb.innerHTML = `<img src="${esc(cc.logo)}" alt="">`; lb.className = 'has-logo'; lb.style.background = ''; }
-  else { lb.textContent = S.course ? cc.badge : '</>'; lb.className = ''; lb.style.background = brand; } $('#nav .logo').style.color = brand;
   document.title = S.course ? `Code Quest — learn ${cc.name} by doing` : 'Code Quest — learn to code by doing';
   const C = window.Cloud, a = $('#acct');
   a.hidden = !(C && C.enabled);
@@ -1069,7 +1065,7 @@ function vWelcome() {
     : S.later ? '<div class="wl-account done">No problem — you can sign in any time from <b>Profile</b>. Until then, progress is saved in this browser.</div>'
     : `<div class="wl-account"><div><b>Already have an account, or want to save your progress?</b><span class="muted">Log in with Google to keep your XP and streak on any device. It is free and optional.</span></div><span class="wl-btns"><button class="btn primary" id="wl-login">Log in now</button><button class="btn ghost" id="wl-later">Maybe later</button></span></div>`;
   view.innerHTML = `<div class="welcome"><button class="stat wl-theme" id="wl-theme"></button>
-    <div class="wl-hero"><span class="wl-logo">&lt;/&gt;</span><h1>Welcome to Code Quest!</h1><p class="lead">Learn to code by doing: bite-sized lessons, real code you run yourself, and a streak to keep you coming back.</p></div>
+    <div class="wl-hero"><img class="wl-logo" src="logos/code-quest.svg" alt=""><h1>Welcome to Code Quest!</h1><p class="lead">Learn to code by doing: bite-sized lessons, real code you run yourself, and a streak to keep you coming back.</p></div>
     ${account}
     <h2 class="wl-h">Choose a language!</h2>
     ${courseCards()}
