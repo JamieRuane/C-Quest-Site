@@ -24,6 +24,7 @@ const HL_TAIL = String.raw`\b(0x[\da-fA-F]+|\d+\.?\d*[fFdDmMuUlL]*)\b|\b([A-Za-z
 const HL_HEAD = String.raw`(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|([$@]{0,2}"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(^[ \t]*#\s*\w+)|`;
 const BT = '\x60';   // a backtick, for JavaScript template strings
 const HLS = {
+  sql: new RegExp(String.raw`(--[^\n]*|\/\*[\s\S]*?\*\/)|('(?:''|[^'])*'|"[^"\n]*")|(\b\B)|\b(SELECT|FROM|WHERE|AND|OR|NOT|IN|IS|NULL|AS|ORDER|BY|ASC|DESC|LIMIT|OFFSET|DISTINCT|GROUP|HAVING|JOIN|INNER|LEFT|RIGHT|FULL|OUTER|CROSS|ON|USING|UNION|INTERSECT|EXCEPT|ALL|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|TABLE|DROP|ALTER|ADD|COLUMN|RENAME|TO|PRIMARY|KEY|FOREIGN|REFERENCES|UNIQUE|DEFAULT|CHECK|CONSTRAINT|INDEX|VIEW|BETWEEN|LIKE|CASE|WHEN|THEN|ELSE|END|EXISTS|BEGIN|COMMIT|ROLLBACK|TRANSACTION|INTEGER|TEXT|REAL|NUMERIC|IF|CASCADE|WITH|AUTOINCREMENT|TRUE|FALSE)\b|\b(\d+\.?\d*)\b|\b([A-Za-z_]\w*)(?=\s*\()`, 'gim'),
   java: new RegExp(HL_HEAD + String.raw`\b(int|long|short|byte|float|double|char|boolean|void|var|String|final|static|public|private|protected|abstract|class|interface|enum|record|extends|implements|new|this|super|import|package|if|else|switch|case|default|for|while|do|break|continue|return|true|false|null|try|catch|finally|throw|throws|instanceof)\b|` + HL_TAIL, 'gm'),
   js: new RegExp(String.raw`(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|` + BT + String.raw`(?:\\.|[^\\` + BT + String.raw`])*` + BT + String.raw`)|(^#![^\n]*)|\b(let|const|var|function|return|if|else|switch|case|default|for|while|do|break|continue|of|in|new|this|class|extends|super|typeof|instanceof|true|false|null|undefined|NaN|Infinity|try|catch|finally|throw|async|await|import|export|from|delete|void|yield)\b|` + HL_TAIL, 'gm'),
   c: new RegExp(HL_HEAD + String.raw`\b(int|float|double|char|void|bool|long|short|unsigned|signed|const|struct|enum|typedef|union|static|extern|sizeof|if|else|switch|case|default|for|while|do|break|continue|return|true|false|NULL|FILE|size_t)\b|` + HL_TAIL, 'gm'),
@@ -213,7 +214,7 @@ function confetti() {
 const isPy = () => !!co().py;
 const wrapOf = () => (co().script ? window[co().script] : null);   // pyWrap or jsWrap for languages that are run, not compiled
 const LOCAL = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) && !/[?&]online\b/.test(location.search);
-const isOnline = () => !LOCAL || !!co().online;
+const isOnline = () => !co().sql && (!LOCAL || !!co().online);   // SQL runs in the browser, never online
 const BUSY = /OCI runtime error|Resource temporarily unavailable/;   // the free service ran out of room for a moment
 const isBusy = j => !j.timedOut && (j.status === '126' || BUSY.test(j.program_error || ''));   // 126 = the sandbox could not start
 async function wandbox(code, stdin) {
@@ -275,7 +276,10 @@ async function runCode(code, stdins) {
   } catch { return { offline: true }; }
 }
 /* wording that depends on the language: Python is run, the others are compiled */
-const W = () => wrapOf()
+const W = () => co().sql
+  ? { service: 'SQL engine', busy: 'Running…', busyTests: 'Checking your SQL…', says: 'SQLite says', warn: 'SQLite says', be: 'database',
+      broken: '<p>SQLite could not run that. The message usually names the word it tripped over — look just before it.</p>' }
+  : wrapOf()
   ? { service: 'online ' + co().name, busy: 'Running…', busyTests: 'Running tests…', says: esc(co().name) + ' says', warn: esc(co().name) + ' says', be: 'interpreter',
       broken: `<p>${esc(co().name)} cannot read it yet — that is a syntax error. The message points at the line (and often the exact spot with a <code>^</code>).</p>` }
   : { service: 'online compiler', busy: 'Compiling…', busyTests: 'Compiling and running tests…', says: 'Compiler says', warn: 'Compiler warnings (worth reading!)', be: 'compiler',
@@ -373,6 +377,89 @@ function editor(code) {
   return { node: w, ta, get value() { return ta.value; }, set(v) { ta.value = v; sync(); } };
 }
 
+/* ---------- SQL: queries run in the browser with sql.js (real SQLite); see sqlrun.js ---------- */
+let sqlReady = null;
+const sqlEngine = () => sqlReady || (sqlReady = new Promise((ok, fail) => {
+  const sc = document.createElement('script');
+  sc.src = 'vendor/sqljs/sql-wasm.js'; sc.onload = ok; sc.onerror = () => fail(new Error('could not load the SQL engine'));
+  document.head.append(sc);
+}).then(() => window.initSqlJs({ locateFile: f => 'vendor/sqljs/' + f })).catch(e => { sqlReady = null; throw e; }));
+async function sqlRun(setup, code, check) {
+  try { return window.SqlRun.runSql(await sqlEngine(), setup, code, check); }
+  catch (e) { return { ok: false, error: 'The SQL engine could not start (' + (e.message || e) + '). Check your connection and reload the page.' }; }
+}
+/* which dataset a step uses: the step's own, else its lesson's, its topic's, or the course default */
+const dbOf = key => { const x = IDX[key] || {}; return (x.step && x.step.db) || (x.lesson && x.lesson.db) || (x.topic && x.topic.db) || co().db || ''; };
+const setupOf = db => (co().datasets || {})[db] || '';
+const sqlTable = (set, label, max = 60) => {
+  if (!set) return '';
+  const rows = set.rows.slice(0, max), more = set.rows.length - rows.length;
+  return `${label ? `<div class="lbl">${label}</div>` : ''}<div class="sqlt-wrap"><table class="sqlt"><thead><tr>${set.columns.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${
+    rows.map(r => `<tr>${r.map(v => `<td${v === 'NULL' ? ' class="null"' : ''}>${esc(v)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${set.columns.length || 1}" class="null">(no rows)</td></tr>`
+  }</tbody></table></div>${more > 0 ? `<p class="muted">… and ${more} more row${more > 1 ? 's' : ''}</p>` : ''}`;
+};
+const sqlErr = msg => `<div class="lbl">❌ SQLite says</div><pre class="err">${esc(msg)}</pre>`;
+function sqlOut(r, check) {
+  if (!r.ok) return sqlErr(r.error);
+  let h = r.sets.map((set, i) => sqlTable(set, r.sets.length > 1 ? 'Result ' + (i + 1) : 'Result')).join('');
+  if (r.changed) h += `<p class="sql-done">✓ ${r.changed} row${r.changed > 1 ? 's' : ''} changed</p>`;
+  if (check && r.last) h += sqlTable(r.last, 'The table afterwards');
+  return h || '<p class="sql-done">✓ Done — that SQL ran without returning a table.</p>';
+}
+/* "Look inside the database": every table and its rows, loaded the first time the panel is opened */
+const tablesBox = db => `<details class="sqldb" data-db="${esc(db)}"><summary>📋 Look inside the <b>${esc(db || 'empty')}</b> database</summary><div class="sqldb-in muted">Loading…</div></details>`;
+document.addEventListener('toggle', async e => {
+  const d = e.target;
+  if (!d.matches || !d.matches('details.sqldb') || !d.open || d.dataset.loaded) return;
+  d.dataset.loaded = '1';
+  const box = $('.sqldb-in', d), setup = setupOf(d.dataset.db);
+  if (!setup) { box.textContent = 'This database starts empty — you create the tables yourself.'; return; }
+  const names = await sqlRun(setup, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY rowid");
+  if (!names.ok) { box.innerHTML = sqlErr(names.error); return; }
+  let h = '';
+  for (const [name] of names.last.rows) { const t = await sqlRun(setup, `SELECT * FROM "${name}"`); h += t.ok ? sqlTable(t.last, '🗂️ ' + name) : ''; }
+  box.classList.remove('muted'); box.innerHTML = h;
+}, true);
+const stripSqlComments = s => String(s).replace(/--.*|\/\*[\s\S]*?\*\//g, '');
+
+/* An SQL challenge has no keyboard input: the learner's result is compared with the answer's result on the same data. */
+function sqlCode(s, ctx) {
+  const db = dbOf(ctx.key), setup = setupOf(db), ed = editor(s.start || co().blank); let fails = 0;
+  const n = el(`<div class="step"><span class="tag">SQL challenge</span><div class="q">${md(s.q)}</div>${tablesBox(db)}<div class="edw"></div><div class="ed-tools"><button class="btn sm blue run">▶ Run</button><button class="btn sm ghost reset">↺ Reset</button>${s.hint ? '<button class="btn sm ghost hint">💡 Hint</button>' : ''}<button class="btn sm ghost sol" hidden>👀 Show solution</button><button class="btn sm ghost skip" hidden>Skip for now →</button></div><div class="hintw"></div><div class="out"></div></div>`);
+  $('.edw', n).append(ed.node);
+  const out = $('.out', n);
+  const struggling = () => { $('.sol', n).hidden = !s.sol; $('.skip', n).hidden = false; };
+  $('.run', n).onclick = async () => { out.innerHTML = '<span class="muted">Running…</span>'; out.innerHTML = sqlOut(await sqlRun(setup, ed.value, s.check), s.check); };
+  $('.reset', n).onclick = () => ed.set(s.start || co().blank);
+  if (s.hint) $('.hint', n).onclick = () => { $('.hintw', n).innerHTML = `<div class="hintbox">💡 ${inl(s.hint)}</div>`; };
+  $('.sol', n).onclick = () => { ctx.wrong(); ed.set(s.sol); toast('Solution loaded — read it line by line, then Check.'); };
+  $('.skip', n).onclick = () => { ctx.wrong(); ctx.skip(); };
+  ctx.ready(true);
+  return { node: n, async check() {
+    const fail = msg => { fails++; if (fails >= 2) struggling(); return { retry: true, msg }; };
+    const bare = stripSqlComments(ed.value);
+    for (const [re, msg] of s.must || []) if (!new RegExp(re, 'i').test(bare)) return fail(`<p>${inl(msg)}</p>`);
+    for (const [re, msg] of s.not || []) if (new RegExp(re, 'i').test(bare)) return fail(`<p>${inl(msg)}</p>`);
+    out.innerHTML = '<span class="muted">Checking your SQL…</span>';
+    const [want, mine] = [await sqlRun(setup, s.sol, s.check), await sqlRun(setup, ed.value, s.check)];
+    if (!want.ok) { out.innerHTML = sqlErr('This exercise has a problem of its own: ' + want.error); return { retry: true, msg: '<p>Sorry — this exercise is broken. Skip it for now.</p>' }; }
+    if (!mine.ok) { out.innerHTML = sqlErr(mine.error); return fail('<p>SQLite could not run that. The message usually names the word it tripped over — look just before it.</p>'); }
+    if (!mine.last) { out.innerHTML = sqlOut(mine); return fail('<p>That ran, but it did not produce a result table. Is there a <code>SELECT</code>?</p>'); }
+    const ordered = s.ordered != null ? s.ordered : window.SqlRun.isOrdered(s.check || s.sol);
+    if (!window.SqlRun.sameResult(want.last, mine.last, ordered)) {
+      const a = want.last, b = mine.last;
+      const why = a.columns.length !== b.columns.length ? `The answer has ${a.columns.length} column${a.columns.length > 1 ? 's' : ''}; yours has ${b.columns.length}.`
+        : a.rows.length !== b.rows.length ? `The answer has ${a.rows.length} row${a.rows.length === 1 ? '' : 's'}; yours has ${b.rows.length}.`
+        : ordered ? 'Same size, but some values or the order are different.' : 'Same size, but some values are different.';
+      out.innerHTML = sqlTable(b, s.check ? 'Your table afterwards' : 'Your result') + sqlTable(a, s.check ? 'What it should look like' : 'Expected result');
+      return fail(`<p>Not the result we are after yet. ${why}</p>`);
+    }
+    out.innerHTML = sqlTable(mine.last, s.check ? 'Your table afterwards' : 'Your result');
+    S.solved[ctx.key] = 1;
+    return { ok: true, msg: '' };
+  } };
+}
+
 /* ---------- step renderers ---------- */
 const TYPE = { info: 'Concept', mcq: 'Quick check', predict: 'Predict the output', fill: 'Fill the blanks', order: 'Put it in order', code: 'Code challenge' };
 const R = {
@@ -393,10 +480,11 @@ const R = {
   },
   predict(s, ctx) {
     const multi = s.out.includes('\n');
-    const n = el(`<div class="step"><span class="tag">Predict the output</span><div class="q">${md(s.q || `What does this print? Be the ${W().be}.`)}</div>${codeBlock(s.code)}${multi ? `<textarea class="ans" rows="${s.out.split('\n').length + 1}" placeholder="Type the exact output (one line per line)" spellcheck="false"></textarea>` : '<input class="ans" placeholder="Type the exact output" spellcheck="false" autocomplete="off" autocapitalize="off">'}</div>`);
+    const n = el(`<div class="step"><span class="tag">Predict the output</span><div class="q">${md(s.q || (co().sql ? 'What does this query return? Type one row per line, with ~|~ between columns.' : `What does this print? Be the ${W().be}.`))}</div>${codeBlock(s.code)}${co().sql ? tablesBox(dbOf(ctx.key)) : ''}${multi ? `<textarea class="ans" rows="${s.out.split('\n').length + 1}" placeholder="Type the exact output (one line per line)" spellcheck="false"></textarea>` : '<input class="ans" placeholder="Type the exact output" spellcheck="false" autocomplete="off" autocapitalize="off">'}</div>`);
     const inp = $('.ans', n); inp.oninput = () => ctx.ready(inp.value.trim() !== '');
     return { node: n, focus: inp, check() {
-      inp.disabled = true; const ok = norm(inp.value) === norm(s.out);
+      const tidy = v => (co().sql ? norm(v).replace(/[ \t]*\|[ \t]*/g, ' | ') : norm(v));      // SQL: spacing around | does not matter
+      inp.disabled = true; const ok = tidy(inp.value) === tidy(s.out);
       return { ok, msg: ok ? '' : `<p>It prints:</p><pre>${esc(s.out)}</pre>` };
     } };
   },
@@ -404,7 +492,7 @@ const R = {
     const blanks = []; let k = 0;
     const src = s.code.replace(/^\n+|\s+$/g, '').replace(/\[\[(.+?)\]\]/g, (m, a) => { blanks.push(a.split('~')); return String.fromCharCode(0xE000 + k++); });
     const html = hl(src).replace(/[-]/g, ch => { const i = ch.charCodeAt(0) - 0xE000, w = Math.max(...blanks[i].map(x => x.length)); return `<input class="blank" data-i="${i}" style="width:${w + 2.5}ch" autocomplete="off" autocapitalize="off" spellcheck="false">`; });
-    const n = el(`<div class="step"><span class="tag">Fill the blanks</span><div class="q">${md(s.q)}</div><pre class="code">${html}</pre></div>`);
+    const n = el(`<div class="step"><span class="tag">Fill the blanks</span><div class="q">${md(s.q)}</div><pre class="code">${html}</pre>${co().sql && s.db !== false ? tablesBox(dbOf(ctx.key)) : ''}</div>`);
     const ins = $$('.blank', n), sq = v => v.replace(/\s+/g, '');
     ins.forEach(i => { i.oninput = () => ctx.ready(ins.every(x => x.value.trim() !== '')); });
     return { node: n, focus: ins[0], check() {
@@ -432,6 +520,7 @@ const R = {
     } };
   },
   code(s, ctx) {
+    if (co().sql) return sqlCode(s, ctx);
     const ed = editor(s.start || co().blank); let fails = 0;
     const n = el(`<div class="step"><span class="tag">Code challenge</span><div class="q">${md(s.q)}</div><div class="edw"></div><div class="ed-tools"><button class="btn sm blue run">▶ Run</button><button class="btn sm ghost reset">↺ Reset</button>${s.hint ? '<button class="btn sm ghost hint">💡 Hint</button>' : ''}<button class="btn sm ghost sol" hidden>👀 Show solution</button><button class="btn sm ghost skip" hidden>Skip for now →</button></div><div class="hintw"></div><div class="out"></div></div>`);
     $('.edw', n).append(ed.node);
@@ -480,7 +569,7 @@ const R = {
 let keyHandler = null;
 document.addEventListener('keydown', e => keyHandler && keyHandler(e));
 const PRAISE = ['Nice!', 'Correct!', 'Exactly right.', 'You are getting dangerous.', 'Clean.', 'Boom.'];
-const praise = () => { const all = PRAISE.concat(isPy() ? ['Very Pythonic.', 'No traceback in sight.'] : wrapOf() ? ['No errors in sight.', 'Runs first time.'] : ['Compiles in my heart.', 'Zero warnings.']); return all[Math.floor(Math.random() * all.length)]; };
+const praise = () => { const all = PRAISE.concat(isPy() ? ['Very Pythonic.', 'No traceback in sight.'] : co().sql ? ['The database agrees.', 'Query perfect.'] : wrapOf() ? ['No errors in sight.', 'Runs first time.'] : ['Compiles in my heart.', 'Zero warnings.']); return all[Math.floor(Math.random() * all.length)]; };
 
 function session(o) {
   document.body.classList.add('in-session');
@@ -655,7 +744,19 @@ function vReview(key) {
   session({ keys: [key], requeue: false, practice: true, exit: '#/bookmarks', done: r => ({ emoji: r.wrong ? '🔁' : '✅', title: r.wrong ? 'Keep it bookmarked' : 'Nailed it', sub: r.wrong ? 'Come back to this one tomorrow.' : 'If it feels easy now, remove the bookmark.', xp: 2, party: !r.wrong }) });
 }
 
+function sqlPlay() {
+  const names = Object.keys(co().datasets || {}).filter(d => d !== 'empty'), pick = S.playDb && (names.includes(S.playDb) || S.playDb === 'empty') ? S.playDb : names[0] || 'empty';
+  view.innerHTML = `<div class="page"><h1>🧪 Playground · SQL</h1><p class="lead">Run any SQL against a practice database. Every run starts from a fresh copy, so you cannot break anything — try a DELETE without a WHERE and see.</p>
+    <label class="sql-pick">Database <select id="pdb">${names.concat('empty').map(d => `<option value="${d}"${d === pick ? ' selected' : ''}>${d === 'empty' ? 'empty (make your own tables)' : d}</option>`).join('')}</select></label>
+    <div id="pdb-box">${tablesBox(pick === 'empty' ? '' : pick)}</div><div class="edw"></div><div class="ed-tools"><button class="btn primary run">▶ Run</button><button class="btn ghost reset">↺ Reset</button></div><div class="out" style="margin-top:14px"></div></div>`;
+  const ed = editor(S.play.sql || co().blank); $('.edw').append(ed.node);
+  ed.ta.addEventListener('input', () => { S.play.sql = ed.value; save(); });
+  $('#pdb').onchange = e => { S.playDb = e.target.value; save(); $('#pdb-box').innerHTML = tablesBox(e.target.value === 'empty' ? '' : e.target.value); };
+  $('.reset').onclick = () => { ed.set(co().blank); delete S.play.sql; save(); };
+  $('.run').onclick = async () => { const out = $('.out'); out.innerHTML = '<span class="muted">Running…</span>'; const d = $('#pdb').value; out.innerHTML = sqlOut(await sqlRun(d === 'empty' ? '' : setupOf(d), ed.value)); };
+}
 function vPlay() {
+  if (co().sql) return sqlPlay();
   view.innerHTML = '<div class="page"><h1>🧪 Playground · ' + esc(co().name) + '</h1><p class="lead">A blank canvas. Try things, break things — ' + (isOnline() ? 'it runs real ' + esc(co().name) + ' on a free online service, so give it a few seconds.' : 'it runs real ' + esc(co().name) + ' on your machine.') + ' Your code is saved automatically.</p><div class="edw"></div><div class="ed-tools"><button class="btn primary run">▶ Run</button><button class="btn ghost reset">↺ Reset</button></div><div class="lbl muted">Program input (stdin) — what the program would read from the keyboard</div><textarea class="field" rows="2" id="stdin" spellcheck="false"></textarea><div class="out" style="margin-top:14px"></div></div>';
   const ed = editor(S.play[S.course] || co().blank); $('.edw').append(ed.node);
   ed.ta.addEventListener('input', () => { S.play[S.course] = ed.value; save(); });
@@ -941,6 +1042,7 @@ const GUIDE = [          // "Don't know which language is for you?"
   ['py', '🌱', 'I have never written code before', 'Start with Python. It reads almost like English, so you can focus on ideas instead of punctuation.'],
   ['c', '⚙️', 'I want to understand how computers really work', 'Start with C. It is small and close to the machine: memory, pointers, the lot. Every other language makes more sense afterwards.'],
   ['cpp', '🎮', 'I want to make fast games or software', 'Start with C++. It powers game engines like Unreal, browsers and anything that has to be quick.'],
+  ['sql', '🗄️', 'I want to work with data', 'Start with SQL. It is how almost every app, website and business stores and searches its data — and it is quick to learn.'],
   ['js', '🌐', 'I want to build websites', 'Start with JavaScript. It is the language every web page runs, and you can see results quickly.'],
   ['java', '☕', 'I am studying Java, or want to build Android apps', 'Start with Java. It is widely taught at school and university and used by big companies everywhere.'],
   ['cs', '🕹️', 'I want to build Unity games or Windows apps', 'Start with C#. It is the language of Unity, with a friendlier feel than C or C++.'],
