@@ -1,7 +1,7 @@
 /* ================= C =================
    One path for everyone: it starts from the very first line of code. */
 course('c', {
-  name: 'C', badge: 'C', color: '#58cc02', video: 'xND0t1pr3KY', glossTry: 'pointer', tool: 'gcc',
+  name: 'C', badge: 'C', logo: 'logos/c.svg', color: '#58cc02', video: 'xND0t1pr3KY', glossTry: 'pointer', tool: 'gcc',
   tagline: 'The language underneath everything. Small, fast, and it does exactly what you say.',
   blank: '#include <stdio.h>\n\nint main() {\n    \n    return 0;\n}\n',
   wandbox: { compiler: 'gcc-head-c', 'compiler-option-raw': '-std=c17\n-Wall\n-lm' },

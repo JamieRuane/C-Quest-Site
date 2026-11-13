@@ -8,9 +8,23 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..700&family=Fredoka:wght@500..700&display=swap">
+<script>
+  // Choose the theme before the page is drawn, so there is no flash: the saved choice, else the device's setting.
+  (function () { var t; try { t = localStorage.getItem('cquest.theme'); } catch (e) {} if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.dataset.theme = t; })();
+</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<svg id="scene" viewBox="0 0 1440 420" preserveAspectRatio="xMidYMin slice" aria-hidden="true">
+  <g class="sc-star"><circle cx="90" cy="40" r="1.6"/><circle cx="210" cy="95" r="1.2"/><circle cx="330" cy="30" r="1.4"/><circle cx="470" cy="80" r="1.1"/><circle cx="600" cy="24" r="1.5"/><circle cx="730" cy="70" r="1.2"/><circle cx="860" cy="36" r="1.6"/><circle cx="980" cy="96" r="1.1"/><circle cx="1210" cy="44" r="1.4"/><circle cx="1320" cy="90" r="1.2"/><circle cx="1400" cy="28" r="1.5"/><circle cx="150" cy="150" r="1"/><circle cx="1150" cy="130" r="1"/></g>
+  <circle class="sc-orb" cx="1010" cy="96" r="40"/>
+  <g class="sc-cloud"><ellipse cx="250" cy="110" rx="70" ry="20"/><ellipse cx="300" cy="94" rx="46" ry="20"/><ellipse cx="205" cy="98" rx="34" ry="15"/><ellipse cx="820" cy="70" rx="60" ry="17"/><ellipse cx="865" cy="57" rx="38" ry="16"/><ellipse cx="1310" cy="120" rx="64" ry="18"/><ellipse cx="1265" cy="108" rx="36" ry="15"/></g>
+  <path class="sc-far" d="M0 300 L120 210 L210 262 L340 150 L470 252 L560 200 L700 292 L840 170 L960 252 L1090 182 L1220 262 L1330 200 L1440 272 V420 H0Z"/>
+  <path class="sc-mid" d="M0 344 L160 262 L300 322 L450 242 L610 332 L780 252 L930 322 L1100 262 L1260 332 L1440 282 V420 H0Z"/>
+  <path class="sc-hill" d="M0 380 C200 330 380 350 560 376 C760 402 900 340 1100 362 C1260 378 1360 350 1440 362 V420 H0Z"/>
+  <g class="sc-tree"><path d="M40 392l16-46 16 46z"/><path d="M78 398l13-38 13 38z"/><path d="M118 390l18-52 18 52z"/><path d="M168 400l12-34 12 34z"/><path d="M1250 384l16-46 16 46z"/><path d="M1296 392l13-38 13 38z"/><path d="M1338 380l18-52 18 52z"/><path d="M1390 390l13-38 13 38z"/></g>
+  <path class="sc-hill2" d="M0 402 C240 372 420 396 700 406 C980 416 1200 386 1440 396 V420 H0Z"/>
+</svg>
 <nav id="nav">
   <a class="logo" href="#/courses" title="All courses"><b id="logo-b">&lt;/&gt;</b><span>Code Quest</span></a>
   <a href="#/" data-r="home"><i>🏠</i><span>Learn</span></a>
@@ -21,6 +35,7 @@
   <a href="#/play" data-r="play"><i>🧪</i><span>Playground</span></a>
   <a href="#/glossary" data-r="glossary"><i>📖</i><span>Glossary</span></a>
   <a href="#/me" data-r="me"><i>🏅</i><span>Profile</span></a>
+  <div id="nav-level"></div>
 </nav>
 <div id="main">
   <header id="top">
@@ -28,6 +43,7 @@
     <span class="stat" id="st-streak" title="Daily streak"></span>
     <span class="stat" id="st-xp" title="Total XP"></span>
     <span class="stat" id="st-lvl" title="Level"></span>
+    <button class="stat" id="theme"></button>
     <button class="stat" id="acct" hidden></button>
   </header>
   <main id="view"></main>

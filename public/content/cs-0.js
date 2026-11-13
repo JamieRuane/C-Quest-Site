@@ -7,7 +7,7 @@
    That compiler is Mono's, which understands C# up to version 7: no switch expressions, records,
    "using var", ranges or top-level statements in runnable code. */
 course('cs', {
-  name: 'C#', badge: 'C#', color: '#a560f0', video: 'wxznTygnRfQ', glossTry: 'property', online: true,
+  name: 'C#', badge: 'C#', logo: 'logos/csharp.svg', color: '#a560f0', video: 'wxznTygnRfQ', glossTry: 'property', online: true,
   tagline: 'C-style syntax, no manual memory, a huge built-in library — and the language of Unity.',
   blank: 'using System;\n\nclass Program {\n    static void Main() {\n        \n    }\n}\n',
   wandbox: { compiler: 'mono-6.12.0.199' }, oneAtATime: true,
