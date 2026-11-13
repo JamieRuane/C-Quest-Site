@@ -429,3 +429,18 @@ h1 .cbadge{vertical-align:middle;margin-right:6px}
 @media(prefers-reduced-motion:reduce){
   *{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
+
+/* SQL course: result tables, the "look inside the database" panel, the playground picker */
+.sqlt-wrap{overflow:auto;max-height:340px;margin:6px 0 12px;border:1px solid var(--line);border-radius:12px;background:var(--solid)}
+.sqlt{border-collapse:collapse;width:100%;font:13.5px/1.4 var(--mono)}
+.sqlt th{position:sticky;top:0;background:var(--card2);color:var(--muted);font-weight:700;text-align:left;padding:7px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.sqlt td{padding:6px 12px;border-bottom:1px solid var(--line);white-space:nowrap;color:var(--text)}
+.sqlt tr:last-child td{border-bottom:0}
+.sqlt td.null{color:var(--faint);font-style:italic}
+.sql-done{font-weight:700;color:var(--t-green-f)}
+.sqldb{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 14px;margin:0 0 12px}
+.sqldb summary{cursor:pointer;font-weight:700;padding:8px 0;color:var(--muted)}
+.sqldb[open]{padding-bottom:10px}
+.sqldb .lbl{font-weight:800;font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+.sql-pick{display:flex;align-items:center;gap:10px;font-weight:700;margin-bottom:12px}
+.sql-pick select{background:var(--field);color:var(--text);border:2px solid var(--line);border-radius:8px;padding:5px 8px;font:inherit}

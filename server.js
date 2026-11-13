@@ -7,7 +7,7 @@ const { run, findTool, LANGS } = require('./runner');
 
 const PORT = +process.env.PORT || 4321;
 const ROOT = path.join(__dirname, 'public');
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.wasm': 'application/wasm' };
 const LOCAL = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`]);
 const NAMES = { c: 'C', cpp: 'C++', py: 'Python', java: 'Java', js: 'JavaScript' };
 

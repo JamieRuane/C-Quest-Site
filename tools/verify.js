@@ -10,6 +10,10 @@
 // Usage: node tools/verify.js [courseId] [topicId]        e.g.  node tools/verify.js py loops
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const { run, findTool } = require('../runner');
+const SqlRun = require('../public/sqlrun.js');
+let sqlEngine = null;                                   // sql.js (real SQLite), loaded the first time it is needed
+const getSql = () => sqlEngine || (sqlEngine = require('sql.js')());
+let SQLSETUP = '';                                      // the dataset of the step being checked (SQL course only)
 
 const dir = path.join(__dirname, '..', 'public', 'content');
 const ctx = vm.createContext({ console }); ctx.window = ctx;
@@ -32,6 +36,7 @@ const LANG = {
     fileLevel(code) { return /\bmain\s*\(/.test(code) ? null : this.incs + code + '\nint main() { return 0; }\n'; },
   },
   py: { tool: 'Python', comments: /#.*/g, wrap: code => code, syntaxOnly: true },
+  sql: { tool: 'SQLite', comments: /--.*|\/\*[\s\S]*?\*\//g },
   js: { tool: 'Node.js', comments: /\/\/.*|\/\*[\s\S]*?\*\//g, wrap: code => code, syntaxOnly: true },
   java: {
     tool: 'java', comments: /\/\/.*|\/\*[\s\S]*?\*\//g,
@@ -48,7 +53,47 @@ const jobs = [], problems = [];
 let skipped = 0;
 const bad = (where, msg) => problems.push(`✗ ${where}: ${msg}`);
 
+/* SQL: every exercise runs on a fresh copy of its dataset, exactly as in the browser */
+function addSql(where, s, setup) {
+  const L = LANG.sql, tidy = v => norm(v).replace(/[ \t]*\|[ \t]*/g, ' | ');
+  const go = async (code, check) => SqlRun.runSql(await getSql(), setup, code, check);
+  if (s.t === 'mcq') { if (!(s.ans >= 0 && s.ans < s.opts.length)) bad(where, 'answer index out of range'); return; }
+  if (s.t === 'info') return;
+  if (s.t === 'fill' && !/\[\[.+?\]\]/.test(s.code)) bad(where, 'no blanks');
+  if (s.t === 'code') {
+    if (!s.sol) return bad(where, 'no solution');
+    const bare = s.sol.replace(L.comments, '');
+    for (const [re, m] of s.must || []) if (!new RegExp(re, 'i').test(bare)) bad(where, 'solution fails must: ' + m);
+    for (const [re, m] of s.not || []) if (new RegExp(re, 'i').test(bare)) bad(where, 'solution fails not: ' + m);
+    jobs.push(async () => {
+      const want = await go(s.sol, s.check);
+      if (!want.ok) return bad(where, 'solution fails: ' + want.error);
+      if (!want.last) return bad(where, 'solution returns no table (add a SELECT, or a check query)');
+      if (!want.last.rows.length) bad(where, 'solution returns no rows, so any empty answer would pass');
+      if (s.start && s.start.trim() !== s.sol.trim() && !(s.must || []).length) {
+        const st = await go(s.start, s.check);
+        const ordered = s.ordered != null ? s.ordered : SqlRun.isOrdered(s.check || s.sol);
+        if (st.ok && SqlRun.sameResult(want.last, st.last, ordered)) bad(where, 'starter code already passes');
+      }
+    });
+    return;
+  }
+  if (s.nc) return;
+  if (s.t === 'predict') jobs.push(async () => {
+    const r = await go(s.code);
+    if (!r.ok) return bad(where, 'predict query fails: ' + r.error);
+    const got = SqlRun.asText(r.last);
+    if (tidy(got) !== tidy(s.out)) bad(where, `says ${JSON.stringify(s.out)} but SQLite returns ${JSON.stringify(got)}`);
+  });
+  if (s.t === 'fill' || s.t === 'order') jobs.push(async () => {
+    const code = s.t === 'fill' ? s.code.replace(/\[\[(.+?)\]\]/g, (m, a) => a.split('~')[0]) : s.lines.join('\n');
+    const r = await go(code);
+    if (!r.ok) bad(where, s.t + ' code fails: ' + r.error);
+  });
+}
+
 function add(where, s, lang, compiled) {
+  if (lang === 'sql') return addSql(where, s, SQLSETUP);
   const L = LANG[lang];
   if (s.t === 'mcq') { if (!(s.ans >= 0 && s.ans < s.opts.length)) bad(where, 'answer index out of range'); return; }
   if (s.t === 'info') return;
@@ -99,7 +144,8 @@ const totals = [];
 for (const co of Object.values(COURSES)) {
   if (onlyCourse && co.id !== onlyCourse) continue;
   if (!LANG[co.id]) { bad(co.id, 'tools/verify.js does not know this language'); continue; }
-  const compiled = !co.online && !!findTool(co.id), before = jobs.length;
+  const compiled = co.sql || (!co.online && !!findTool(co.id)), before = jobs.length;
+  const setupFor = (s, l, t) => { const db = (s && s.db) || (l && l.db) || t.db || co.db; if (co.sql && !(db in (co.datasets || {}))) bad(`${co.id}/${t.id}`, 'unknown database ' + db); return (co.datasets || {})[db] || ''; };
   let nSteps = 0, nLessons = 0, nTopics = 0;
   const ids = new Set(), terms = new Set();
   for (const g of co.glossary) { if (terms.has(g.term)) bad(co.id + ' glossary', 'duplicate term ' + g.term); terms.add(g.term); }
@@ -112,12 +158,12 @@ for (const co of Object.values(COURSES)) {
       nLessons++;
       if (lids.has(l.id)) bad(`${co.id}/${t.id}/${l.id}`, 'duplicate lesson id'); lids.add(l.id);
       for (const v of l.v || []) if (!/^\d+:\d\d:\d\d$/.test(v[0]) || (v[1] && !/^\d+:\d\d:\d\d$/.test(v[1]))) bad(`${co.id}/${t.id}/${l.id}`, 'bad video time');
-      l.steps.forEach((s, i) => { nSteps++; add(`${co.id}/${t.id}/${l.id}/${i} (${s.t})`, s, co.id, compiled); });
+      l.steps.forEach((s, i) => { nSteps++; SQLSETUP = setupFor(s, l, t); add(`${co.id}/${t.id}/${l.id}/${i} (${s.t})`, s, co.id, compiled); });
     }
-    (t.quiz || []).forEach((s, i) => { nSteps++; add(`${co.id}/${t.id}/quiz/${i} (${s.t})`, s, co.id, compiled); });
+    (t.quiz || []).forEach((s, i) => { nSteps++; SQLSETUP = setupFor(s, null, t); add(`${co.id}/${t.id}/quiz/${i} (${s.t})`, s, co.id, compiled); });
   }
   totals.push(`${co.name.padEnd(7)} ${String(nTopics).padStart(2)} topics, ${String(nLessons).padStart(2)} lessons, ${String(nSteps).padStart(3)} steps - ` +
-    (compiled ? `${jobs.length - before} run with ${findTool(co.id).version}` : co.online ? 'structure checks only (runs online: see public/verify-cs.js)' : `structure checks only: ${LANG[co.id].tool} was not found on this machine`));
+    (compiled ? `${jobs.length - before} run with ${co.sql ? 'SQLite (sql.js)' : findTool(co.id).version}` : co.online ? 'structure checks only (runs online: see public/verify-cs.js)' : `structure checks only: ${LANG[co.id].tool} was not found on this machine`));
 }
 
 (async () => {
