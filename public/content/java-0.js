@@ -1,10 +1,10 @@
 /* ================= Java =================
-   One path for everyone: it starts from the very first line of code.  preview: true = the course is still being written.
+   One path for everyone: it starts from the very first line of code.
    Programs are compiled with javac and run with java. The class that holds main() can have any name:
    javafix.js makes that work from a single file, locally and on the online compiler.
    M(body, 'java.util.Scanner') wraps statements in a complete program; extra arguments are imports. */
 course('java', {
-  name: 'Java', badge: 'Jv', logo: 'logos/java.svg', color: '#e2573b', video: 'xTtL8E4LzTQ', glossTry: 'Scanner', tool: 'the JDK (javac)', showErr: true, preview: true,
+  name: 'Java', badge: 'Jv', logo: 'logos/java.svg', color: '#e2573b', video: 'xTtL8E4LzTQ', glossTry: 'Scanner', tool: 'the JDK (javac)', showErr: true,
   tagline: 'Taught in schools and universities everywhere, and behind Android apps and big business systems.',
   blank: 'public class Main {\n    public static void main(String[] args) {\n        \n    }\n}\n',
   wandbox: { compiler: 'openjdk-jdk-22+36' },

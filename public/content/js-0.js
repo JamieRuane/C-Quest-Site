@@ -1,5 +1,5 @@
 /* ================= JavaScript =================
-   One path for everyone: it starts from the very first line of code.  preview: true = the course is still being written.
+   One path for everyone: it starts from the very first line of code.
    Programs run on Node.js through jswrap.js: console.log() prints, and prompt("question") reads a line of input
    and echoes it, so prompts and typed lines appear in the output (as in the Python course).
    Code challenges: tests are [{ in: 'typed input\n', out: 'exact output' | has: ['must contain'] | re: 'regex' }].
@@ -8,7 +8,7 @@
    template string for you: use it as ${tl('Hi ${name}')} inside c`...`. */
 const tl = s => '\x60' + s + '\x60';
 course('js', {
-  name: 'JavaScript', badge: 'JS', logo: 'logos/javascript.svg', color: '#00a3a3', video: 'lfmg-EJ8gm4', glossTry: 'const', tool: 'Node.js', script: 'jsWrap', preview: true,
+  name: 'JavaScript', badge: 'JS', logo: 'logos/javascript.svg', color: '#00a3a3', video: 'lfmg-EJ8gm4', glossTry: 'const', tool: 'Node.js', script: 'jsWrap',
   tagline: 'The language of the web. Every site you visit runs it — and it is quick to get results.',
   blank: '// Write your JavaScript here\n',
   wandbox: { compiler: 'nodejs-20.17.0' },
