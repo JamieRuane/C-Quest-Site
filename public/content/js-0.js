@@ -8,7 +8,7 @@
    template string for you: use it as ${tl('Hi ${name}')} inside c`...`. */
 const tl = s => '\x60' + s + '\x60';
 course('js', {
-  name: 'JavaScript', badge: 'JS', color: '#00a3a3', video: 'lfmg-EJ8gm4', glossTry: 'const', tool: 'Node.js', script: 'jsWrap', preview: true,
+  name: 'JavaScript', badge: 'JS', logo: 'logos/javascript.svg', color: '#00a3a3', video: 'lfmg-EJ8gm4', glossTry: 'const', tool: 'Node.js', script: 'jsWrap', preview: true,
   tagline: 'The language of the web. Every site you visit runs it — and it is quick to get results.',
   blank: '// Write your JavaScript here\n',
   wandbox: { compiler: 'nodejs-20.17.0' },

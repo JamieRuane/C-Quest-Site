@@ -143,15 +143,42 @@ function checkAch() {
 
 /* ---------- ui bits ---------- */
 const view = $('#view');
+/* theme: 'light', 'dark' or 'system' (follow the device). Kept on this device, not in the synced progress. */
+const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+const themeChoice = () => { try { const t = localStorage.getItem('cquest.theme'); return t === 'light' || t === 'dark' ? t : 'system'; } catch { return 'system'; } };
+const themeNow = () => (themeChoice() === 'system' ? (darkQuery.matches ? 'dark' : 'light') : themeChoice());
+function applyTheme() {
+  const dark = themeNow() === 'dark';
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  $$('#theme, .wl-theme').forEach(b => { b.textContent = dark ? '☀️' : '🌙'; b.title = dark ? 'Switch to light mode' : 'Switch to dark mode'; });
+}
+function setTheme(choice) {
+  try { if (choice === 'system') localStorage.removeItem('cquest.theme'); else localStorage.setItem('cquest.theme', choice); } catch { /* private mode: lasts until the tab closes */ }
+  applyTheme();
+}
+const flipTheme = () => setTheme(themeNow() === 'dark' ? 'light' : 'dark');
+darkQuery.addEventListener('change', applyTheme);
+$('#theme').onclick = flipTheme;
+
+/* a language's badge: its logo on a light tile, or its short name on its colour if there is no logo */
+const badge = (c, big) => c.logo
+  ? `<span class="cbadge logo${big ? ' big' : ''}" title="${esc(c.name)}"><img src="${esc(c.logo)}" alt="${esc(c.name)} logo"></span>`
+  : `<span class="cbadge${big ? ' big' : ''}" style="background:${c.color}">${esc(c.badge)}</span>`;
+
 function hud() {
+  applyTheme();
+  const into = S.xp % 120;
+  $('#nav-level').innerHTML = `<div><b>⚡ Lv ${level()}</b><small>${into} / 120 XP</small></div><div class="pbar"><i style="width:${into / 120 * 100}%"></i></div>`;
   $('#st-streak').textContent = '🔥 ' + liveStreak();
   $('#st-xp').textContent = '⚡ ' + S.xp + ' XP';
   $('#st-lvl').textContent = '🎖️ Lv ' + level();
   const cc = co(), cb = $('#st-course');
   cb.hidden = !S.course;
-  cb.innerHTML = `<span class="cbadge" style="background:${cc.color}">${esc(cc.badge)}</span><span class="cname">${esc(cc.name)}</span><span class="caret">▾</span>`;
+  cb.innerHTML = `${badge(cc)}<span class="cname">${esc(cc.name)}</span><span class="caret">▾</span>`;
   const brand = S.course ? cc.color : '#58cc02';
-  $('#logo-b').textContent = S.course ? cc.badge : '</>'; $('#logo-b').style.background = brand; $('#nav .logo').style.color = brand;
+  const lb = $('#logo-b');
+  if (S.course && cc.logo) { lb.innerHTML = `<img src="${esc(cc.logo)}" alt="">`; lb.className = 'has-logo'; lb.style.background = ''; }
+  else { lb.textContent = S.course ? cc.badge : '</>'; lb.className = ''; lb.style.background = brand; } $('#nav .logo').style.color = brand;
   document.title = S.course ? `Code Quest — learn ${cc.name} by doing` : 'Code Quest — learn to code by doing';
   const C = window.Cloud, a = $('#acct');
   a.hidden = !(C && C.enabled);
@@ -536,10 +563,12 @@ function wireVideos() {
 function vHome() {
   const cur = currentUnit(), doneN = co().lessons.filter(l => S.done[l.gid]).length, today = S.days[dayKey()] || 0;
   const pct = Math.min(1, today / S.goal), C = 2 * Math.PI * 40, due = Object.keys(S.mistakes).filter(mine).length;
-  let h = '<div class="home"><div>' + (hasTracks(S.course) ? '<p class="trackline">' + TRACKS[trackOf(S.course)].join(' ') + ' · <a href="#/start/' + S.course + '">change starting point</a></p>' : '');
+  const first = window.Cloud && Cloud.user && (Cloud.user.displayName || '').split(' ')[0];
+  const hello = first ? 'Hello, ' + first : doneN ? 'Welcome back' : 'Hello, ' + co().name;
+  let h = '<div class="home"><div><div class="hello"><h1>👋 ' + esc(hello) + '</h1><p>' + (doneN ? 'Continue your ' : 'Start your ') + esc(co().name) + ' journey.</p></div>' + (hasTracks(S.course) ? '<p class="trackline">' + TRACKS[trackOf(S.course)].join(' ') + ' · <a href="#/start/' + S.course + '">change starting point</a></p>' : '');
   co().topics.forEach((t, ti) => {
     const d = t.lessons.filter(l => S.done[l.gid]).length;
-    h += `<section class="topic" style="--tc:${t.color}"><header class="topic-head"><div><small>TOPIC ${ti + 1}</small><h2>${t.icon} ${esc(t.title)}</h2><p>${esc(t.blurb)}</p></div><div class="topic-prog">${d}/${t.lessons.length}</div></header><div class="nodes">`;
+    h += `<section class="topic" style="--tc:${t.color}"><header class="topic-head"><div><small>TOPIC ${ti + 1}</small><h2>${t.icon} ${esc(t.title)}</h2><p>${esc(t.blurb)}</p></div><span class="topic-art" aria-hidden="true"><span>&lt;/&gt;</span></span><div class="topic-prog">${d}/${t.lessons.length}</div>${cur && (cur === 'quiz:' + t.gid || t.lessons.some(l => l.gid === cur)) ? `<a class="topic-go" href="${cur.startsWith('quiz:') ? '#/quiz/' + cur.slice(5) : '#/lesson/' + cur}" title="Continue this topic">▶</a>` : ''}</header><div class="nodes">`;
     const node = (u, href, icon, title, sub, k) => { const st = unitDone(u) ? 'done' : unlocked(u) ? 'open' : 'locked'; return `<a class="node ${st}${cur === u ? ' cur' : ''}" style="--o:${Math.round(Math.sin(k * 1.15) * 80)}px" href="${href}" data-u="${u}"><span class="bubble">${st === 'done' ? '✓' : st === 'locked' ? '🔒' : icon}</span><span class="nlabel">${esc(title)}<small>${sub}</small></span></a>`; };
     t.lessons.forEach((l, li) => { h += node(l.gid, '#/lesson/' + l.gid, l.icon || '★', l.title, l.steps.some(s => s.t === 'code') ? '⌨️ hands-on' : 'concepts', li); });
     h += node('quiz:' + t.gid, '#/quiz/' + t.gid, '🏆', t.title + ' quiz', S.quiz[t.gid] != null ? 'best: ' + S.quiz[t.gid] + '%' : 'revision', t.lessons.length);
@@ -547,7 +576,7 @@ function vHome() {
   });
   const nxt = cur && (cur.startsWith('quiz:') ? '#/quiz/' + cur.slice(5) : '#/lesson/' + cur);
   h += `</div><aside class="side">
-    <div class="card"><div class="row"><div class="ring"><svg width="96" height="96"><circle cx="48" cy="48" r="40" fill="none" stroke="#e3e8f7" stroke-width="10"/><circle cx="48" cy="48" r="40" fill="none" stroke="${pct >= 1 ? '#ffc800' : '#58cc02'}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - pct)}"/></svg><b>${pct >= 1 ? '✓' : today + '/' + S.goal}</b></div><div><h3>Daily goal</h3><span class="muted">${pct >= 1 ? 'Done for today. Anything more is a bonus.' : (S.goal - today) + ' XP to go today'}</span></div></div></div>
+    <div class="card"><div class="row"><div class="ring"><svg width="96" height="96"><circle cx="48" cy="48" r="40" fill="none" style="stroke:var(--line)" stroke-width="10"/><circle cx="48" cy="48" r="40" fill="none" stroke="${pct >= 1 ? '#ffc800' : '#58cc02'}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - pct)}"/></svg><b>${pct >= 1 ? '✓' : today + '/' + S.goal}</b></div><div><h3>Daily goal</h3><span class="muted">${pct >= 1 ? 'Done for today. Anything more is a bonus.' : (S.goal - today) + ' XP to go today'}</span></div></div></div>
     <div class="card"><h3>🔥 ${liveStreak()} day streak</h3><span class="muted">${S.last === dayKey() ? 'Safe for today. See you tomorrow!' : liveStreak() ? 'Do one lesson today to keep it alive.' : 'Finish a lesson to start a streak.'}</span></div>
     <div class="card"><h3>Course progress</h3><div class="pbar"><i style="width:${doneN / co().lessons.length * 100}%"></i></div><p class="muted" style="margin:.5em 0 .8em">${doneN} of ${co().lessons.length} lessons · ${levelName()}</p>${nxt ? `<a class="btn primary" href="${nxt}">${doneN ? 'Continue' : 'Start learning'}</a>` : '<b>👑 Course complete!</b>'}</div>
     <div class="card"><h3>🎯 Practice</h3><p class="muted" style="margin:.2em 0 .8em">${due ? due + ' question' + (due > 1 ? 's' : '') + ' you got wrong ' + (due > 1 ? 'are' : 'is') + ' waiting for revenge.' : 'No mistakes waiting. Suspiciously good.'}</p><a class="btn" href="#/practice">Practice now</a></div>
@@ -870,6 +899,7 @@ function vMe() {
   ${accountCard()}<h2 class="sec">Settings</h2><div class="card settings">
     <label>Daily XP goal <select id="goal">${[[15, 'Casual — 15'], [30, 'Regular — 30'], [50, 'Serious — 50'], [80, 'Insane — 80']].map(g => `<option value="${g[0]}"${S.goal === g[0] ? ' selected' : ''}>${g[1]}</option>`).join('')}</select></label>
     ${hasTracks(S.course) ? `<label>Starting point for ${esc(co().name)} — ${TRACKS[trackOf(S.course)][1].toLowerCase()} <a class="btn sm" href="#/start/${S.course}">Change</a></label>` : ''}
+    <label>Appearance <select id="thm">${[['system', 'Match my device'], ['light', 'Light'], ['dark', 'Dark']].map(o => `<option value="${o[0]}"${themeChoice() === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>
     <label>Sound effects <input type="checkbox" id="snd"${S.sound ? ' checked' : ''}></label>
     <label>Unlock everything (skip the lesson order) <input type="checkbox" id="unl"${S.unlockAll ? ' checked' : ''}></label>
     <label>Back up or move your progress <span><button class="btn sm" id="exp">Export</button> <button class="btn sm" id="imp">Import</button></span></label>
@@ -879,6 +909,7 @@ function vMe() {
   if ($('#signout')) $('#signout').onclick = () => Cloud.signOut();
   wireBoardSettings(); wireCourseCards();
   $('#goal').onchange = e => { S.goal = +e.target.value; save(); };
+  $('#thm').onchange = e => setTheme(e.target.value);
   $('#snd').onchange = e => { S.sound = e.target.checked; save(); };
   $('#unl').onchange = e => { S.unlockAll = e.target.checked; save(); };
   $('#exp').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' })); a.download = 'code-quest-progress.json'; a.click(); };
@@ -893,7 +924,7 @@ function courseStats(cid) {
 }
 function courseCards() {
   return `<div class="courses">${CIDS.map(cid => { const { c, d, n, xp, pct } = courseStats(cid), on = S.course === cid;
-    return `<button class="course-card${on ? ' on' : ''}" data-c="${cid}" style="--cc:${c.color}"><span class="cbadge big" style="background:${c.color}">${esc(c.badge)}</span><span class="cc-body"><b>${esc(c.name)}</b><span class="muted">${esc(c.tagline)}</span><span class="pbar"><i style="width:${pct}%"></i></span><small>${hasTracks(cid) && S.start[cid] ? TRACKS[S.start[cid]].join(' ') + ' · ' : ''}${d} of ${n} lessons · ⚡ ${xp} XP${d === n ? ' · 👑 complete' : ''}${c.preview ? ' · 🚧 first topic, more coming' : ''}</small></span><span class="cc-go">${on ? '✓ Learning' : d ? 'Continue' : 'Start'}</span></button>`; }).join('')}</div>`;
+    return `<button class="course-card${on ? ' on' : ''}" data-c="${cid}" style="--cc:${c.color}">${badge(c, true)}<span class="cc-body"><b>${esc(c.name)}</b><span class="muted">${esc(c.tagline)}</span><span class="pbar"><i style="width:${pct}%"></i></span><small>${hasTracks(cid) && S.start[cid] ? TRACKS[S.start[cid]].join(' ') + ' · ' : ''}${d} of ${n} lessons · ⚡ ${xp} XP${d === n ? ' · 👑 complete' : ''}${c.preview ? ' · 🚧 first topic, more coming' : ''}</small></span><span class="cc-go">${on ? '✓ Learning' : d ? 'Continue' : 'Start'}</span></button>`; }).join('')}</div>`;
 }
 /* choosing a course: the first time, ask where to start */
 function pickCourse(cid) {
@@ -921,7 +952,7 @@ function vWelcome() {
     : C.user ? `<div class="wl-account done">✓ Signed in as <b>${esc(C.user.displayName || C.user.email || 'you')}</b> — your progress will be saved to your account.</div>`
     : S.later ? '<div class="wl-account done">No problem — you can sign in any time from <b>Profile</b>. Until then, progress is saved in this browser.</div>'
     : `<div class="wl-account"><div><b>Already have an account, or want to save your progress?</b><span class="muted">Log in with Google to keep your XP and streak on any device. It is free and optional.</span></div><span class="wl-btns"><button class="btn primary" id="wl-login">Log in now</button><button class="btn ghost" id="wl-later">Maybe later</button></span></div>`;
-  view.innerHTML = `<div class="welcome">
+  view.innerHTML = `<div class="welcome"><button class="stat wl-theme" id="wl-theme"></button>
     <div class="wl-hero"><span class="wl-logo">&lt;/&gt;</span><h1>Welcome to Code Quest!</h1><p class="lead">Learn to code by doing: bite-sized lessons, real code you run yourself, and a streak to keep you coming back.</p></div>
     ${account}
     <h2 class="wl-h">Choose a language!</h2>
@@ -933,6 +964,7 @@ function vWelcome() {
   wireCourseCards();
   $$('.wl-pick').forEach(b => { b.onclick = () => pickCourse(b.dataset.c); });
   if ($('#wl-login')) $('#wl-login').onclick = signIn;
+  $('#wl-theme').onclick = flipTheme; applyTheme();
   if ($('#wl-later')) $('#wl-later').onclick = () => { S.later = true; save(); vWelcome(); };
 }
 function vCourses() {
@@ -946,7 +978,7 @@ function vStart(cid) {
   if (!hasTracks(cid)) { pickCourse(cid); return; }
   const cur = S.start[cid], n = tr => onTrack(cid, tr).reduce((a, t) => a + t.lessons.length, 0);
   const card = (tr, col, title, text) => `<button class="course-card${cur === tr ? ' on' : ''}" data-t="${tr}" style="--cc:${col}"><span class="cbadge big" style="background:${col}">${TRACKS[tr][0]}</span><span class="cc-body"><b>${title}</b><span class="muted">${text}</span><small>${TRACKS[tr][1]} · ${n(tr)} lessons</small></span><span class="cc-go">${cur === tr ? '✓ Current' : 'Start here'}</span></button>`;
-  view.innerHTML = `<div class="page"><a class="back" href="#/courses">← All courses</a><h1 style="margin-top:10px"><span class="cbadge" style="background:${c.color};vertical-align:middle">${esc(c.badge)}</span> How much do you already know?</h1><p class="lead">Pick where your ${esc(c.name)} path begins. You can change this later without losing any progress.</p><div class="courses">${
+  view.innerHTML = `<div class="page"><a class="back" href="#/courses">← All courses</a><h1 style="margin-top:10px">${badge(c)} How much do you already know?</h1><p class="lead">Pick where your ${esc(c.name)} path begins. You can change this later without losing any progress.</p><div class="courses">${
     card('new', '#58cc02', 'I\'m new to programming', `Start from the very first line of code: printing, variables, input, decisions, loops, functions and arrays. Then carry on into the rest of ${esc(c.name)}.`)}${
     card('c', c.color, 'I already know some C', `For example, you finished the C course here. Skips the basics and opens with what ${esc(c.name)} does differently from C.`)}</div></div>`;
   $$('.course-card[data-t]').forEach(b => { b.onclick = () => {
@@ -960,7 +992,7 @@ $('#st-course').onclick = e => {
   e.stopPropagation();
   if ($('.cmenu')) return closeMenu();
   const m = el(`<div class="cmenu"><div class="cmenu-h">My courses</div>${CIDS.map(cid => { const { c, d, n } = courseStats(cid);
-    return `<button data-c="${cid}" class="${S.course === cid ? 'on' : ''}"><span class="cbadge" style="background:${c.color}">${esc(c.badge)}</span><span><b>${esc(c.name)}</b><small>${d}/${n} lessons</small></span><i>${S.course === cid ? '✓' : ''}</i></button>`; }).join('')}<a href="#/courses">All courses →</a></div>`);
+    return `<button data-c="${cid}" class="${S.course === cid ? 'on' : ''}">${badge(c)}<span><b>${esc(c.name)}</b><small>${d}/${n} lessons</small></span><i>${S.course === cid ? '✓' : ''}</i></button>`; }).join('')}<a href="#/courses">All courses →</a></div>`);
   $('#top').append(m);
   $$('button', m).forEach(b => { b.onclick = () => { closeMenu(); if (b.dataset.c !== S.course) pickCourse(b.dataset.c); }; });
   $('a', m).onclick = closeMenu;

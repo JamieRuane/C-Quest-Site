@@ -4,7 +4,7 @@
      track: 'c'    "I already know C" path only (cpp-1.js, first topic)
      no track      both paths */
 course('cpp', {
-  name: 'C++', badge: 'C++', color: '#1c8ef6', video: '-TkoO8Z07hI', glossTry: 'reference',
+  name: 'C++', badge: 'C++', logo: 'logos/cpp.svg', color: '#1c8ef6', video: '-TkoO8Z07hI', glossTry: 'reference',
   tagline: 'C plus classes, strings that just work and memory that cleans up after itself.',
   blank: '#include <iostream>\n\nint main() {\n    \n    return 0;\n}\n',
   wandbox: { compiler: 'gcc-13.2.0', 'compiler-option-raw': '-std=c++20\n-Wall' },
