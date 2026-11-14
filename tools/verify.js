@@ -51,22 +51,32 @@ const LANG = {
     // a snippet that defines functions or types: put it at package level, next to an empty main
     fileLevel(code) { return /^package\s/m.test(code) ? null : ctx.goProgram(code, ''); },
   },
+  rust: {
+    remote: true, warnings: true, comments: /\/\/.*|\/\*[\s\S]*?\*\//g,
+    wrap(code) { return /\bfn\s+main\s*\(/.test(code) ? code : ctx.rustProgram('', code); },
+    // a snippet that defines functions, structs or traits: put it next to an empty main
+    fileLevel(code) { return /\bfn\s+main\s*\(/.test(code) ? null : ctx.rustProgram(code, ''); },
+  },
   cs: { tool: 'the online compiler', comments: /\/\/.*|\/\*[\s\S]*?\*\//g },
 };
 
 /* Languages with no compiler on this machine (Go) run on Wandbox, the online compiler the site itself uses.
    Same result shape as runner.js. Busy answers from the free service are retried. */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-let inFlight = 0;                                       // a free shared service: at most 2 requests at a time
-async function wandbox(compiler, code, stdin) {
-  while (inFlight >= 2) await sleep(100);
+let inFlight = 0;                                       // a free shared service: one request at a time, with a short gap
+async function wandbox(opts, code, stdin) {
+  while (inFlight >= 1) await sleep(100);
   inFlight++;
-  try { return await wandboxRetry(compiler, code, stdin); } finally { inFlight--; }
+  try { return await wandboxRetry(opts, code, stdin); } finally { await sleep(500); inFlight--; }
 }
-async function wandboxRetry(compiler, code, stdin) {
+async function wandboxRetry(opts, code, stdin) {
   for (let attempt = 0; ; attempt++) {
     try {
-      const r = await fetch('https://wandbox.org/api/compile.json', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ compiler, code, stdin }), signal: AbortSignal.timeout(60000) });
+      const r = await fetch('https://wandbox.org/api/compile.json', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...opts, code, stdin }), signal: AbortSignal.timeout(60000) });
+      if (r.status === 429 || !r.ok) {                  // rate limited or overloaded: back off for longer each time
+        if (attempt >= 8) throw new Error('Wandbox answered ' + r.status + ' ' + (await r.text()).trim());
+        await sleep(15000 * (attempt + 1)); continue;
+      }
       const j = await r.json();
       if (attempt < 4 && (j.status === '126' || /OCI runtime error|Resource temporarily unavailable/.test(j.program_error || ''))) { await sleep(2000 * (attempt + 1)); continue; }
       return j;
@@ -74,11 +84,11 @@ async function wandboxRetry(compiler, code, stdin) {
   }
 }
 async function runRemote(lang, code, stdins) {
-  const compiler = COURSES[lang].wandbox.compiler, first = await wandbox(compiler, code, stdins[0] || '');
+  const opts = COURSES[lang].wandbox, first = await wandbox(opts, code, stdins[0] || '');
   const msg = first.compiler_message || '';
-  if (first.status !== '0' && /\.go:\d+:\d+:/.test(msg)) return { compile: { ok: false, output: msg.trim() }, runs: [] };
-  const rest = await Promise.all(stdins.slice(1).map(i => wandbox(compiler, code, i || '')));
-  return { compile: { ok: true, output: '' }, runs: [first, ...rest].map(j => ({ stdout: (j.program_output || '').replace(/\r/g, ''), stderr: j.program_error || '', code: +j.status || 0, timedOut: false })) };
+  if (first.status !== '0' && /\.go:\d+:\d+:|^error(\[E\d+\])?:/m.test(msg)) return { compile: { ok: false, output: msg.trim() }, runs: [] };
+  const rest = await Promise.all(stdins.slice(1).map(i => wandbox(opts, code, i || '')));
+  return { compile: { ok: true, output: /^warning/m.test(msg) ? msg.trim() : '' }, runs: [first, ...rest].map(j => ({ stdout: (j.program_output || '').replace(/\r/g, ''), stderr: j.program_error || '', code: +j.status || 0, timedOut: false })) };
 }
 const exec = (lang, code, stdins, opts) => (LANG[lang].remote ? runRemote(lang, code, stdins) : run(lang, code, stdins, opts));
 const norm = s => String(s).replace(/\r/g, '').split('\n').map(l => l.trimEnd()).join('\n').trim();

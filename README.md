@@ -1,6 +1,6 @@
 # Code Quest
 
-Duolingo-style courses that teach programming by doing. Eight languages, one account:
+Duolingo-style courses that teach programming by doing. Nine languages, one account:
 
 | Course | Lessons | Starts from | Runs your code with |
 |---|---|---|---|
@@ -11,17 +11,19 @@ Duolingo-style courses that teach programming by doing. Eight languages, one acc
 | **JavaScript** | 32 | The very first line of code | Node.js |
 | **Java** | 32 | The very first line of code | The JDK (`javac` / `java`) |
 | **Go** | 23 | The very first line of code | Online compiler (Go 1.23) |
+| **Rust** | 23 | The very first line of code | Online compiler (Rust 1.82) |
 | **SQL** | 35 | The very first query | SQLite in the browser ([sql.js](https://sql.js.org)), nothing to install |
 
 Every course has a lesson path, quizzes, a Practice deck built from your own mistakes, bookmarks,
-a glossary, a Playground, and clips from Bro Code's free courses. XP, streak, achievements and the
+a glossary and a Playground. Every course except Rust also has clips from Bro Code's free courses (Bro Code
+has no Rust course). XP, streak, achievements and the
 leaderboard are shared across languages; lessons, quizzes, bookmarks and mistakes are kept per language.
 
 ## Run it on your computer
 
 Needs [Node.js](https://nodejs.org). For code challenges you also need the tool for the language you are
 learning: gcc (C), g++ (C++), [Python 3](https://www.python.org) or a JDK (Java). JavaScript runs on Node.js itself,
-and C# and Go always use the online compiler.
+and C#, Go and Rust always use the online compiler.
 
 Double-click `start.bat`, or:
 
@@ -57,7 +59,7 @@ npm run test:unit                # saved-progress upgrade (migrate.js)
 npm run test:rules               # database security rules (needs Java for the emulator)
 ```
 
-Go has no local compiler either, so `tools/verify.js` runs every Go exercise on the online compiler
+Go and Rust have no local compiler either, so `tools/verify.js` runs every Go and Rust exercise on the online compiler
 (it needs an internet connection and takes a few minutes).
 
 C# cannot be compiled locally, so `tools/verify.js` only checks its structure. To run every C# exercise
