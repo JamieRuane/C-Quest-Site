@@ -608,6 +608,8 @@ function session(o) {
   let i = 0, r = null, state = 'answer', combo = 0;
   view.innerHTML = `<div class="sess"><header class="sess-top"><a class="x" href="${o.exit}" title="Quit">✕</a><div class="pbar"><i style="width:0"></i></div><span class="combo"></span><button class="bm" title="Bookmark this step for later">🔖</button></header><div class="sess-body"></div><footer class="sess-foot"><div class="foot-in"><div class="fb"></div><button class="btn primary big go">Check</button></div></footer></div>`;
   const body = $('.sess-body'), foot = $('.sess-foot'), fb = $('.fb'), go = $('.go'), bm = $('.bm');
+  /* this lesson's own bar: a bare $('.pbar i') would find the XP bar in the sidebar first */
+  const bar = $('.sess-top .pbar i'), progress = () => { bar.style.width = (solved.size / total * 100) + '%'; };
   const markWrong = k => { wrong.add(k); S.mistakes[k] = (S.mistakes[k] || 0) + 1; combo = 0; save(); };
   const ctx = k => ({ key: k, ready: b => { if (state === 'answer') go.disabled = !b; }, wrong: () => markWrong(k), skip: () => { solved.add(k); next(); } });
   const feedback = (ok, title, html) => { foot.className = 'sess-foot ' + (ok ? 'ok' : 'bad'); fb.innerHTML = `<b class="h">${title}</b>${html || ''}`; };
@@ -619,7 +621,7 @@ function session(o) {
     r = R[step.t](step, ctx(k)); body.append(r.node);
     if (r.passive) go.disabled = false;
     bm.classList.toggle('on', !!S.bookmarks[k]);
-    $('.pbar i').style.width = (solved.size / total * 100) + '%';
+    progress();
     $('.combo').textContent = combo >= 3 ? '🔥 x' + combo : '';
     body.scrollTop = 0;
     if (r.focus) r.focus.focus();
@@ -642,7 +644,7 @@ function session(o) {
       feedback(false, o.requeue ? 'Not quite — this one will come back' : 'Not quite', res.msg + (step.why ? md(step.why) : ''));
     }
     save();
-    $('.pbar i').style.width = (solved.size / total * 100) + '%';
+    progress();
     state = 'next'; go.textContent = 'Continue'; go.disabled = false;
   }
   function next() { i++; if (i >= q.length) finish(); else show(); }
