@@ -31,6 +31,7 @@ const HLS = {
   py: /(#[^\n]*)|((?:\b[rRbBfFuU]{1,2})?(?:"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'))|(^[ \t]*@[\w.]+)|\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|case|nonlocal|not|or|pass|raise|return|try|while|with|yield|self)\b|\b(0x[\da-fA-F]+|\d[\d_]*\.?\d*(?:e[+-]?\d+)?j?)\b|\b([A-Za-z_]\w*)(?=\s*\()/gm,
   cpp: new RegExp(HL_HEAD + String.raw`\b(int|float|double|char|void|bool|long|short|unsigned|signed|const|constexpr|struct|enum|typedef|union|static|extern|sizeof|if|else|switch|case|default|for|while|do|break|continue|return|true|false|nullptr|NULL|auto|class|public|private|protected|virtual|override|final|namespace|using|template|typename|new|delete|this|try|catch|throw|operator|friend|inline|size_t)\b|` + HL_TAIL, 'gm'),
   go: new RegExp(String.raw`(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|` + BT + '[^' + BT + ']*' + BT + String.raw`)|(\b\B)|\b(package|import|func|var|const|type|struct|interface|map|chan|go|defer|select|if|else|switch|case|default|fallthrough|for|range|break|continue|return|goto|true|false|nil|iota|int|int8|int16|int32|int64|uint|uint8|uint64|float32|float64|string|bool|byte|rune|error|any|make|new|len|cap|append|delete|copy|panic|recover)\b|` + HL_TAIL, 'gm'),
+  rust: new RegExp(String.raw`(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\\n])')|(#!?\[[^\]\n]*\]|\b[a-z_]\w*!)|\b(as|break|const|continue|crate|dyn|else|enum|false|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|true|type|unsafe|use|where|while|i8|i16|i32|i64|i128|isize|u8|u16|u32|u64|u128|usize|f32|f64|bool|char|str|String|Vec|Option|Result|Some|None|Ok|Err|Box|HashMap|HashSet)\b|` + HL_TAIL, 'gm'),
   cs: new RegExp(HL_HEAD + String.raw`\b(int|float|double|decimal|char|void|bool|long|short|uint|byte|string|object|var|const|static|readonly|class|struct|enum|interface|namespace|using|public|private|protected|internal|abstract|virtual|override|sealed|new|this|base|if|else|switch|case|default|for|foreach|in|while|do|break|continue|return|true|false|null|try|catch|finally|throw|out|ref|params|get|set|is|as|typeof|where)\b|` + HL_TAIL, 'gm'),
 };
 function hl(code) {
@@ -235,19 +236,24 @@ async function wandboxOnce(code, stdin) {
 }
 /* turn the online compiler's raw messages into what a local compiler would have printed */
 const GOFILE = /(?:\/home\/wandbox\/|\.\/)?prog\.go\b/g;
+/* Rust: call the file main.rs, and drop notes that only make sense with cargo or a terminal */
+const RUSTY = t => String(t || '').replace(/\bprog\.rs\b/g, 'main.rs')
+  .replace(/^\s*= note: this error originates in the macro[^\n]*\n?/gm, '').replace(/^For more information about this error[^\n]*\n?/gm, '')
+  .replace(/^note: run with `RUST_BACKTRACE=1`[^\n]*\n?/gm, '');
 const TIDY = {
   java: t => String(t || '').replace(/\bprog\.java\b/g, 'Main.java').trim(),
   c: t => String(t || '').replace(/\bprog\.c\b/g, 'main.c').trim(),
   cpp: t => String(t || '').replace(/\bprog\.cc\b/g, 'main.cpp').trim(),
   go: t => String(t || '').replace(/^# .*\n?/gm, '').replace(GOFILE, 'main.go').trim(),   // drop Go's "# package" header line
+  rust: t => RUSTY(t).trim(),
   cs: t => [...new Set(String(t || '').split('\n').filter(l => /\b(error|warning) (CS|MSB)\d+/.test(l) && !/warning CS8[67]\d\d/.test(l))
     .map(l => l.replace(/^.*?(?=\(\d+,\d+\))/, 'Program.cs').replace(/\s*\[[^\]]*proj\]\s*$/, '').trim()))].join('\n'),
 };
-const FAILED = { java: /\berror:/, c: /error:|ld returned|undefined reference/, cpp: /error:|ld returned|undefined reference/, go: /\.go:\d+:\d+:/, cs: /\berror (CS|MSB)\d+/ };
+const FAILED = { java: /\berror:/, c: /error:|ld returned|undefined reference/, cpp: /error:|ld returned|undefined reference/, go: /\.go:\d+:\d+:/, rust: /^error(\[E\d+\])?:/m, cs: /\berror (CS|MSB)\d+/ };
 async function runOnline(code, stdins) {
   const lang = S.course;
   const asRun = j => j.timedOut ? { stdout: '', stderr: '', code: 0, timedOut: true }
-    : { stdout: (j.program_output || '').replace(/\r/g, ''), stderr: (j.program_error || '').replace(/\r/g, '').replace(/\bprog\.java\b/g, 'Main.java').replace(GOFILE, 'main.go'), code: j.signal ? (/Segm/.test(j.signal) ? 139 : /Kill/.test(j.signal) ? 137 : 134) : +j.status || 0 };
+    : { stdout: (j.program_output || '').replace(/\r/g, ''), stderr: (j.program_error || '').replace(/\r/g, '').replace(/\bprog\.java\b/g, 'Main.java').replace(GOFILE, 'main.go').replace(/\bprog\.rs\b/g, 'main.rs').replace(/^note: run with `RUST_BACKTRACE=1`[^\n]*\n?/gm, ''), code: j.signal ? (/Segm/.test(j.signal) ? 139 : /Kill/.test(j.signal) ? 137 : 134) : +j.status || 0 };
   const first = await wandbox(code, stdins[0] || '');
   if (first.timedOut) return { compile: { ok: true, output: '' }, runs: stdins.map(() => asRun(first)) };
   let out = '';
@@ -319,6 +325,14 @@ const GOERR = [
   [/deadlock/, '🔒 <b>Deadlock</b> — every goroutine is stuck waiting, usually on a channel that nobody sends to or receives from.'],
   [/close of closed channel|send on closed channel/, '📪 <b>Closed channel</b> — a channel was used after it was closed.'],
 ];
+const RUSTERR = [
+  [/index out of bounds/, '📏 <b>Index out of bounds</b> — past the end of the vector or array. Indexes start at 0, so the last one is <code>len() - 1</code>. <code>.get(i)</code> returns an <code>Option</code> instead of panicking.'],
+  [/`Option::unwrap\(\)` on a `None`/, '🕳️ <b>unwrap() on None</b> — you unwrapped an <code>Option</code> that held nothing. Use <code>match</code>, <code>if let</code> or <code>unwrap_or</code> to handle the <code>None</code> case.'],
+  [/`Result::unwrap\(\)` on an `Err`/, '⚠️ <b>unwrap() on an Err</b> — something failed (the error is shown above) and <code>unwrap()</code> turned it into a crash. Handle it with <code>match</code> or pass it on with <code>?</code>.'],
+  [/divide by zero|remainder with a divisor of zero/, '➗ <b>Divide by zero</b> — a whole number was divided by zero.'],
+  [/with overflow/, '🌊 <b>Integer overflow</b> — the result is too big (or too small) for its type. Try a bigger type like <code>i64</code>, or <code>checked_add</code>.'],
+  [/char boundary|byte index/, '✂️ <b>Bad string slice</b> — the slice cuts outside the string, or through the middle of a character. Count with <code>.chars()</code> instead of bytes.'],
+];
 const PYERR = {
   NameError: '🔤 <b>NameError</b> — Python does not know that name. A typo, missing quotes around text, or used before it was given a value?',
   UnboundLocalError: '🔤 <b>UnboundLocalError</b> — you used a variable inside a function before assigning it there.',
@@ -349,6 +363,8 @@ function crashNote(r) {
   if (je) { const kind = je[1].split('.').pop(); return JAVAERR[kind] || '💥 The program stopped with an exception (' + esc(kind) + '). Nothing caught it.'; }
   const gp = /^(?:panic|fatal error): (.+)$/m.exec(r.stderr || '');                       // Go
   if (gp) { const known = GOERR.find(([re]) => re.test(gp[1])); return known ? known[1] : '💥 <b>panic</b> — ' + esc(gp[1].trim()) + ' Nothing recovered from it, so the program stopped.'; }
+  const rp = /thread '[^']*' panicked at [^\n]*\n([^\n]+)/.exec(r.stderr || '');           // Rust
+  if (rp) { const known = RUSTERR.find(([re]) => re.test(rp[1])); return known ? known[1] : '💥 <b>panic</b> — ' + esc(rp[1].trim()) + ' The program stopped.'; }
   const ue = /Unhandled Exception[.:]?\s*([^\n]+)/i.exec(r.stderr || '');
   if (ue) return '💥 Unhandled exception — ' + esc(ue[1].trim()) + ' Nothing caught it, so the program stopped.';
   if (/terminate called/.test(r.stderr || '')) return '💥 An exception was thrown and never caught' + ((r.stderr.match(/what\(\):\s*([^\n]*)/) || [])[1] ? ': ' + esc(r.stderr.match(/what\(\):\s*([^\n]*)/)[1].trim()) : '') + '.';
@@ -1055,6 +1071,7 @@ const GUIDE = [          // "Don't know which language is for you?"
   ['js', '🌐', 'I want to build websites', 'Start with JavaScript. It is the language every web page runs, and you can see results quickly.'],
   ['java', '☕', 'I am studying Java, or want to build Android apps', 'Start with Java. It is widely taught at school and university and used by big companies everywhere.'],
   ['go', '☁️', 'I want to build servers and cloud tools', 'Start with Go. It is small, fast and made for servers — Docker and Kubernetes are written in it.'],
+  ['rust', '🦀', 'I want fast programs that never crash on memory bugs', 'Start with Rust. It is as fast as C++, but its compiler catches memory mistakes before your program ever runs.'],
   ['cs', '🕹️', 'I want to build Unity games or Windows apps', 'Start with C#. It is the language of Unity, with a friendlier feel than C or C++.'],
 ];
 function vWelcome() {
