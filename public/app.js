@@ -72,6 +72,9 @@ function applyTracks() {
     const course = COURSES[cid];
     course.topics = onTrack(cid, trackOf(cid));
     course.lessons = course.topics.flatMap(t => t.lessons);
+    /* topics marked advanced: true form "Part 2" after the Final Boss. Finishing the course means finishing Part 1 (core). */
+    course.core = course.topics.filter(t => !t.advanced).flatMap(t => t.lessons);
+    course.adv = course.topics.filter(t => t.advanced).flatMap(t => t.lessons);
     course.units = course.topics.flatMap(t => [...t.lessons.map(l => l.gid), 'quiz:' + t.gid]);
   });
 }
@@ -89,8 +92,9 @@ applyTracks();
 /* the course being learned right now; everything on screen belongs to it */
 const co = () => COURSES[S.course] || COURSES[CIDS[0]];
 const mine = k => !!IDX[k] && IDX[k].course.id === S.course;
-const doneIn = (s, cid) => COURSES[cid].lessons.filter(l => s.done[l.gid]).length;
-const allDone = (s, cid) => !!COURSES[cid] && COURSES[cid].lessons.every(l => s.done[l.gid]);
+const doneIn = (s, cid, part = 'core') => COURSES[cid][part].filter(l => s.done[l.gid]).length;
+const allDone = (s, cid) => !!COURSES[cid] && COURSES[cid].core.every(l => s.done[l.gid]);
+const advDone = (s, cid) => !!COURSES[cid] && COURSES[cid].adv.length > 0 && COURSES[cid].adv.every(l => s.done[l.gid]);
 function setCourse(cid, quiet) {
   if (!COURSES[cid] || S.course === cid) return;
   S.course = cid; save();
@@ -107,7 +111,7 @@ const levelName = () => LEVELS[Math.min(level() - 1, LEVELS.length - 1)];
 const ACH = [
   ['first', '👶', 'Hello, World', 'Finish your first lesson', s => count(s.done) >= 1],
   ['five', '🖐️', 'High five', 'Finish 5 lessons', s => count(s.done) >= 5],
-  ['half', '⛰️', 'Halfway up', 'Finish half of a course', s => CIDS.some(c => doneIn(s, c) >= COURSES[c].lessons.length / 2)],
+  ['half', '⛰️', 'Halfway up', 'Finish half of a course', s => CIDS.some(c => doneIn(s, c) >= COURSES[c].core.length / 2)],
   ['perfect', '💎', 'Flawless', 'Finish a lesson with zero mistakes', s => s.perfect >= 1],
   ['s3', '🔥', 'Warming up', 'Reach a 3-day streak', s => s.best >= 3],
   ['s7', '🌋', 'On fire', 'Reach a 7-day streak', s => s.best >= 7],
@@ -129,6 +133,7 @@ const ACH = [
   ['cs', '🎼', 'Looking sharp', 'Finish every C# lesson', s => allDone(s, 'cs')],
   ['conn', '🧩', 'Connected', 'Solve a Connections puzzle', s => Object.values(s.connect || {}).some(r => r.won)],
   ['connperf', '🎯', 'No mistakes', 'Solve a Connections puzzle without a mistake', s => Object.values(s.connect || {}).some(r => r.won && !r.mistakes)],
+  ['advanced', '🧠', 'Going pro', 'Finish the Advanced part of a course', s => CIDS.some(c => advDone(s, c))],
   ['boss', '👑', 'Polyglot', 'Finish every course', s => CIDS.every(c => allDone(s, c))],
 ];
 
@@ -675,14 +680,16 @@ function wireVideos() {
 }
 
 function vHome() {
-  const cur = currentUnit(), doneN = co().lessons.filter(l => S.done[l.gid]).length, today = S.days[dayKey()] || 0;
+  const cur = currentUnit(), doneN = co().lessons.filter(l => S.done[l.gid]).length, coreDone = allDone(S, S.course), today = S.days[dayKey()] || 0;
   const pct = Math.min(1, today / S.goal), C = 2 * Math.PI * 40, due = Object.keys(S.mistakes).filter(mine).length;
   const first = window.Cloud && Cloud.user && (Cloud.user.displayName || '').split(' ')[0];
   const hello = first ? 'Hello, ' + first : doneN ? 'Welcome back' : 'Hello, ' + co().name;
   let h = '<div class="home"><div><div class="hello"><h1>👋 ' + esc(hello) + '</h1><p>' + (doneN ? 'Continue your ' : 'Start your ') + esc(co().name) + ' journey.</p></div>' + (hasTracks(S.course) ? '<p class="trackline">' + TRACKS[trackOf(S.course)].join(' ') + ' · <a href="#/start/' + S.course + '">change starting point</a></p>' : '');
+  const firstAdv = co().topics.findIndex(t => t.advanced);
   co().topics.forEach((t, ti) => {
     const d = t.lessons.filter(l => S.done[l.gid]).length;
-    h += `<section class="topic" style="--tc:${t.color}"><header class="topic-head"><div><small>TOPIC ${ti + 1}</small><h2>${t.icon} ${esc(t.title)}</h2><p>${esc(t.blurb)}</p></div><span class="topic-art" aria-hidden="true"><span>&lt;/&gt;</span></span><div class="topic-prog">${d}/${t.lessons.length}</div>${cur && (cur === 'quiz:' + t.gid || t.lessons.some(l => l.gid === cur)) ? `<a class="topic-go" href="${cur.startsWith('quiz:') ? '#/quiz/' + cur.slice(5) : '#/lesson/' + cur}" title="Continue this topic">▶</a>` : ''}</header><div class="nodes">`;
+    if (ti === firstAdv) h += `<div class="part-head"><small>PART 2</small><h2>🧠 Advanced ${esc(co().name)}</h2><p>${coreDone ? 'You finished the course. Now for the techniques professionals use every day.' : 'Professional techniques, for after the Final Boss. Finish Part 1 to unlock it.'}</p></div>`;
+    h += `<section class="topic" style="--tc:${t.color}"><header class="topic-head"><div><small>${t.advanced ? 'ADVANCED ' + (ti - firstAdv + 1) : 'TOPIC ' + (ti + 1)}</small><h2>${t.icon} ${esc(t.title)}</h2><p>${esc(t.blurb)}</p></div><span class="topic-art" aria-hidden="true"><span>&lt;/&gt;</span></span><div class="topic-prog">${d}/${t.lessons.length}</div>${cur && (cur === 'quiz:' + t.gid || t.lessons.some(l => l.gid === cur)) ? `<a class="topic-go" href="${cur.startsWith('quiz:') ? '#/quiz/' + cur.slice(5) : '#/lesson/' + cur}" title="Continue this topic">▶</a>` : ''}</header><div class="nodes">`;
     const node = (u, href, icon, title, sub, k) => { const st = unitDone(u) ? 'done' : unlocked(u) ? 'open' : 'locked'; return `<a class="node ${st}${cur === u ? ' cur' : ''}" style="--o:${Math.round(Math.sin(k * 1.15) * 80)}px" href="${href}" data-u="${u}"><span class="bubble">${st === 'done' ? '✓' : st === 'locked' ? '🔒' : icon}</span><span class="nlabel">${esc(title)}<small>${sub}</small></span></a>`; };
     t.lessons.forEach((l, li) => { h += node(l.gid, '#/lesson/' + l.gid, l.icon || '★', l.title, l.steps.some(s => s.t === 'code') ? '⌨️ hands-on' : 'concepts', li); });
     h += node('quiz:' + t.gid, '#/quiz/' + t.gid, '🏆', t.title + ' quiz', S.quiz[t.gid] != null ? 'best: ' + S.quiz[t.gid] + '%' : 'revision', t.lessons.length);
@@ -692,7 +699,8 @@ function vHome() {
   h += `</div><aside class="side">
     <div class="card"><div class="row"><div class="ring"><svg width="96" height="96"><circle cx="48" cy="48" r="40" fill="none" style="stroke:var(--line)" stroke-width="10"/><circle cx="48" cy="48" r="40" fill="none" stroke="${pct >= 1 ? '#ffc800' : '#58cc02'}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - pct)}"/></svg><b>${pct >= 1 ? '✓' : today + '/' + S.goal}</b></div><div><h3>Daily goal</h3><span class="muted">${pct >= 1 ? 'Done for today. Anything more is a bonus.' : (S.goal - today) + ' XP to go today'}</span></div></div></div>
     <div class="card"><h3>🔥 ${liveStreak()} day streak</h3><span class="muted">${S.last === dayKey() ? 'Safe for today. See you tomorrow!' : liveStreak() ? 'Do one lesson today to keep it alive.' : 'Finish a lesson to start a streak.'}</span></div>
-    <div class="card"><h3>Course progress</h3><div class="pbar"><i style="width:${doneN / co().lessons.length * 100}%"></i></div><p class="muted" style="margin:.5em 0 .8em">${doneN} of ${co().lessons.length} lessons · ${levelName()}</p>${nxt ? `<a class="btn primary" href="${nxt}">${doneN ? 'Continue' : 'Start learning'}</a>` : '<b>👑 Course complete!</b>'}</div>
+    ${(() => { const part = coreDone && co().adv.length ? 'adv' : 'core', n = co()[part].length, d = doneIn(S, S.course, part);
+      return `<div class="card"><h3>${part === 'adv' ? '🧠 Advanced progress' : 'Course progress'}</h3><div class="pbar"><i style="width:${d / n * 100}%"></i></div><p class="muted" style="margin:.5em 0 .8em">${d} of ${n} ${part === 'adv' ? 'advanced ' : ''}lessons · ${levelName()}${part === 'adv' ? '<br>👑 Part 1 complete' : ''}</p>${nxt ? `<a class="btn primary" href="${nxt}">${doneN ? 'Continue' : 'Start learning'}</a>` : `<b>${co().adv.length ? '🧠 Advanced complete!' : '👑 Course complete!'}</b>`}</div>`; })()}
     <div class="card"><h3>🎯 Practice</h3><p class="muted" style="margin:.2em 0 .8em">${due ? due + ' question' + (due > 1 ? 's' : '') + ' you got wrong ' + (due > 1 ? 'are' : 'is') + ' waiting for revenge.' : 'No mistakes waiting. Suspiciously good.'}</p><a class="btn" href="#/practice">Practice now</a></div>
   </aside></div>`;
   view.innerHTML = h;
@@ -1046,11 +1054,11 @@ function vMe() {
 /* ---------- courses: the language switcher ---------- */
 function courseStats(cid) {
   const c = COURSES[cid], d = doneIn(S, cid);
-  return { c, d, n: c.lessons.length, xp: S.cxp[cid] || 0, pct: d / c.lessons.length * 100 };
+  return { c, d, n: c.core.length, xp: S.cxp[cid] || 0, pct: d / c.core.length * 100, adv: c.adv.length ? ` · 🧠 Advanced ${doneIn(S, cid, 'adv')}/${c.adv.length}` : '' };
 }
 function courseCards() {
-  return `<div class="courses">${CIDS.map(cid => { const { c, d, n, xp, pct } = courseStats(cid), on = S.course === cid;
-    return `<button class="course-card${on ? ' on' : ''}" data-c="${cid}" style="--cc:${c.color}">${badge(c, true)}<span class="cc-body"><b>${esc(c.name)}</b><span class="muted">${esc(c.tagline)}</span><span class="pbar"><i style="width:${pct}%"></i></span><small>${hasTracks(cid) && S.start[cid] ? TRACKS[S.start[cid]].join(' ') + ' · ' : ''}${d} of ${n} lessons · ⚡ ${xp} XP${d === n ? ' · 👑 complete' : ''}${c.preview ? ' · 🚧 first topic, more coming' : ''}</small></span><span class="cc-go">${on ? '✓ Learning' : d ? 'Continue' : 'Start'}</span></button>`; }).join('')}</div>`;
+  return `<div class="courses">${CIDS.map(cid => { const { c, d, n, xp, pct, adv } = courseStats(cid), on = S.course === cid;
+    return `<button class="course-card${on ? ' on' : ''}" data-c="${cid}" style="--cc:${c.color}">${badge(c, true)}<span class="cc-body"><b>${esc(c.name)}</b><span class="muted">${esc(c.tagline)}</span><span class="pbar"><i style="width:${pct}%"></i></span><small>${hasTracks(cid) && S.start[cid] ? TRACKS[S.start[cid]].join(' ') + ' · ' : ''}${d} of ${n} lessons · ⚡ ${xp} XP${d === n ? ' · 👑 complete' : ''}${adv}${c.preview ? ' · 🚧 first topic, more coming' : ''}</small></span><span class="cc-go">${on ? '✓ Learning' : d ? 'Continue' : 'Start'}</span></button>`; }).join('')}</div>`;
 }
 /* choosing a course: the first time, ask where to start */
 function pickCourse(cid) {

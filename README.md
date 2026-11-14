@@ -5,7 +5,7 @@ Duolingo-style courses that teach programming by doing. Nine languages, one acco
 | Course | Lessons | Starts from | Runs your code with |
 |---|---|---|---|
 | **C** | 52 | The very first line of code | gcc |
-| **Python** | 46 | The very first line of code | Python 3 |
+| **Python** | 46 + 23 advanced | The very first line of code | Python 3 |
 | **C++** | 29 | The beginning, or "I already know some C" | g++ |
 | **C#** | 28 | The beginning, or "I already know some C" | Online compiler (Mono) |
 | **JavaScript** | 32 | The very first line of code | Node.js |
@@ -18,6 +18,10 @@ Every course has a lesson path, quizzes, a Practice deck built from your own mis
 a glossary and a Playground. Every course except Rust also has clips from Bro Code's free courses (Bro Code
 has no Rust course). XP, streak, achievements and the
 leaderboard are shared across languages; lessons, quizzes, bookmarks and mistakes are kept per language.
+
+Python also has **Part 2: Advanced**, which unlocks after its Final Boss: decorators, generators, dataclasses,
+custom exceptions, context managers, logging, unittest, regular expressions, CSV/JSON, dates, Big-O, recursion,
+heaps, threads, asyncio and three professional capstones. Finishing Part 1 still counts as finishing the course.
 
 ## Run it on your computer
 
@@ -73,6 +77,7 @@ on the online compiler, start the site, open the browser console and run `await 
 3. In `public/app.js`, add the language to `HLS` (highlighting), and to `TIDY` / `FAILED` if it is compiled online.
    A language that is run rather than compiled (like Python or JavaScript) instead names a wrapper with `script: '...'`.
    Mark an unfinished course `preview: true` so its card says more lessons are coming.
+   Topics marked `advanced: true` (listed after the Final Boss) form the course's "Part 2: Advanced" section.
 4. If it can run locally, add it to `runner.js`; add its snippet wrapper to `tools/verify.js`.
 
 ## Putting it online
