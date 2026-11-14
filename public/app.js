@@ -15,7 +15,7 @@ const count = o => Object.keys(o).length;
 const norm = s => String(s).replace(/\r/g, '').split('\n').map(l => l.trimEnd()).join('\n').trim();
 
 /* inline formatting: ~code~ and **bold** */
-const inl = s => esc(s).replace(/\\~/g, '\u0002').split('~').map((p, i) => i % 2 ? `<code>${p}</code>` : p.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')).join('').replace(/\u0002/g, '~');
+const inl = s => esc(s).replace(/\\~/g, '\u0002').split('~').map((p, i) => i % 2 ? `<code>${p}</code>` : p.replace(/\*\((.+?)\)\*/g, '<i class="cite">($1)</i>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')).join('').replace(/\u0002/g, '~');
 const md = s => String(s || '').trim().split(/\n\s*\n/).map(p => `<p>${inl(p).replace(/\n/g, '<br>')}</p>`).join('');
 const plain = s => String(s || '').replace(/[~*]/g, '').replace(/\s+/g, ' ').trim();
 

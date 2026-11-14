@@ -52,6 +52,7 @@ h1,h2,h3{line-height:1.2;margin:0 0 .4em}
 code,pre,kbd{font-family:var(--mono)}
 code{background:var(--icode-bg);border:1px solid var(--icode-line);border-radius:6px;padding:.05em .4em;font-size:.9em;color:var(--icode);white-space:pre-wrap}
 .muted{color:var(--muted)}
+.cite{color:var(--muted);font-size:.9em;white-space:nowrap}
 [hidden]{display:none!important}
 
 /* scenery: one drawing, recoloured by the theme. A band across the top that fades into the page and stays put while it scrolls. */
