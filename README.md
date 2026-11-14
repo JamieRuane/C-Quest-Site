@@ -9,7 +9,7 @@ Duolingo-style courses that teach programming by doing. Nine languages, one acco
 | **C++** | 29 | The beginning, or "I already know some C" | g++ |
 | **C#** | 28 | The beginning, or "I already know some C" | Online compiler (Mono) |
 | **JavaScript** | 32 | The very first line of code | Node.js |
-| **Java** | 32 | The very first line of code | The JDK (`javac` / `java`) |
+| **Java** | 32 + 25 advanced | The very first line of code | The JDK (`javac` / `java`) |
 | **Go** | 23 | The very first line of code | Online compiler (Go 1.23) |
 | **Rust** | 23 | The very first line of code | Online compiler (Rust 1.82) |
 | **SQL** | 35 | The very first query | SQLite in the browser ([sql.js](https://sql.js.org)), nothing to install |
@@ -19,9 +19,19 @@ a glossary and a Playground. Every course except Rust also has clips from Bro Co
 has no Rust course). XP, streak, achievements and the
 leaderboard are shared across languages; lessons, quizzes, bookmarks and mistakes are kept per language.
 
-Python also has **Part 2: Advanced**, which unlocks after its Final Boss: decorators, generators, dataclasses,
+Python and Java also have **Part 2: Advanced**, which unlocks after the Final Boss. Python's covers decorators, generators, dataclasses,
 custom exceptions, context managers, logging, unittest, regular expressions, CSV/JSON, dates, Big-O, recursion,
-heaps, threads, asyncio and three professional capstones. Finishing Part 1 still counts as finishing the course.
+heaps, threads, asyncio and three professional capstones.
+
+Java's Part 2 covers generics, lambdas, comparators, streams and collectors, Optional, stacks/queues/priority
+queues/TreeMap, records, sealed types and pattern matching, equals/hashCode, exceptions, try-with-resources,
+design patterns, and three multithreading topics (threads and their life cycle, executors, race conditions,
+synchronized, atomics, concurrent collections, locks, deadlock, producer/consumer, wait/notifyAll,
+CompletableFuture and parallel streams). The multithreading lessons cite two sets of course slides: Deitel,
+*Java How to Program* 11/e Chapter 23 "Concurrency", and "Concurrency and Java: An introduction with Java".
+Citations are written `*(like this)*` in lesson text and shown in small grey italics.
+
+In both courses, finishing Part 1 still counts as finishing the course.
 
 ## Run it on your computer
 
