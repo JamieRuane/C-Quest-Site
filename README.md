@@ -4,7 +4,7 @@ Duolingo-style courses that teach programming by doing. Nine languages, one acco
 
 | Course | Lessons | Starts from | Runs your code with |
 |---|---|---|---|
-| **C** | 52 | The very first line of code | gcc |
+| **C** | 52 + 22 advanced | The very first line of code | gcc |
 | **Python** | 46 + 23 advanced | The very first line of code | Python 3 |
 | **C++** | 29 | The beginning, or "I already know some C" | g++ |
 | **C#** | 28 | The beginning, or "I already know some C" | Online compiler (Mono) |
@@ -19,7 +19,7 @@ a glossary and a Playground. Every course except Rust also has clips from Bro Co
 has no Rust course). XP, streak, achievements and the
 leaderboard are shared across languages; lessons, quizzes, bookmarks and mistakes are kept per language.
 
-Python and Java also have **Part 2: Advanced**, which unlocks after the Final Boss. Python's covers decorators, generators, dataclasses,
+Python, Java and C also have **Part 2: Advanced**, which unlocks after the Final Boss. Python's covers decorators, generators, dataclasses,
 custom exceptions, context managers, logging, unittest, regular expressions, CSV/JSON, dates, Big-O, recursion,
 heaps, threads, asyncio and three professional capstones.
 
@@ -31,7 +31,13 @@ CompletableFuture and parallel streams). The multithreading lessons cite two set
 *Java How to Program* 11/e Chapter 23 "Concurrency", and "Concurrency and Java: An introduction with Java".
 Citations are written `*(like this)*` in lesson text and shown in small grey italics.
 
-In both courses, finishing Part 1 still counts as finishing the course.
+C's Part 2 covers bitwise operators and flags, function pointers, qsort/bsearch and dispatch tables, safe macros,
+conditional compilation and headers, static/extern/const, unions, struct layout and padding, variadic functions,
+error handling with strtol/errno, safe strings, the goto cleanup pattern, a growable array, linked lists, queues,
+hash tables, binary search trees, binary heaps, and three systems capstones (a stack machine, an expression
+evaluator and a bit-packed date format).
+
+In every course with a Part 2, finishing Part 1 still counts as finishing the course.
 
 ## Run it on your computer
 
